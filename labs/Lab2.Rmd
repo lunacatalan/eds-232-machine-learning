@@ -12,9 +12,10 @@ Once you have done that, we'll start today's lab by specifying a recipe for a po
 ```{r}
 # Specify a recipe
 poly_pumpkins_recipe <-
-  recipe(price ~ package, data = pumpkins_train) %>%
-  step_integer(all_predictors(), zero_based = TRUE) %>% 
-  step_poly(all_predictors(), degree = 4)
+  recipe(price ~ package, # y ~ x variables
+         data = pumpkins_train) %>% # specify data
+  step_integer(all_predictors(), zero_based = TRUE) %>% # data to numerical form 
+  step_poly(all_predictors(), degree = 4) # add polynomial effect
 ```
 
 How did that work? Later we will learn about model tuning that will let us do things like find the optimal value for degree.  For now, we'd like to have a flexible model, so we'll use a relatively large value.
@@ -23,21 +24,24 @@ Polynomial regression is still linear regression, so our model specification loo
 
 ```{r}
 # Create a model specification called poly_spec
-poly_spec <- linear_reg() %>% 
-  set_engine("lm") %>% 
-  set_mode("regression")
+poly_spec <- linear_reg() %>% # specify type of model
+  set_engine("lm") %>% # set to linear regression
+  set_mode("regression") # define as regression
 ```
 Question 1: Now take the recipe and model specification that just created and bundle them into a workflow called poly_df.
 
 ```{r}
 # Bundle recipe and model spec into a workflow
-poly_wf <-
+poly_wf <- workflow() %>% 
+  add_recipe(poly_pumpkins_recipe) %>% 
+  add_model(poly_spec)
 ```
 
 Question 2: fit a model to the pumpkins_train data using your workflow and assign it to poly_wf_fit
 ```{r}
 # Create a model
-poly_wf_fit <- 
+poly_wf_fit <- poly_wf %>% 
+  fit(data = pumpkins_train) # use training data
 ```
 
 ```{r}
@@ -63,6 +67,8 @@ metrics(data = poly_results, truth = price, estimate = .pred)
 ```
 Question 3: How do the performance metrics differ between the linear model from last week and the polynomial model we fit today?  Which model performs better on predicting the price of different packages of pumpkins?
 
+The performance metrics for the polynomial model are more accurate than the metrics for the linear model. The .estimate values for the polynomical model are smaller than the values for the linear model. The polynomial model therefore performs better because it is predicting the values to a more accurate degree. 
+
 Let's visualize our model results.  First prep the results by binding the encoded package variable to them.
 ```{r}
 # Bind encoded package column to the results
@@ -83,6 +89,14 @@ Question 4: Create a scatter plot that takes the poly_results and plots package 
 ```{r}
 # Make a scatter plot
 poly_results %>% 
+  ggplot(mapping = aes(x = package_integer, y = price)) +
+  geom_point(size = 1.6) +
+  # Overlay a line of best fit
+  geom_line(aes(y = .pred), 
+            color = "orange", 
+            linewidth = 1.2) +
+  xlab("package")
+  
 
 ```
 
@@ -94,13 +108,33 @@ geom_smooth(method = lm, formula = y ~ poly(x, degree = 3), color = "midnightblu
 ```{r}
 # Make a smoother scatter plot 
 poly_results %>% 
+  ggplot(mapping = aes(x = package_integer, y = price)) +
+  geom_point(size = 1.6) +
+  # Overlay a line of best fit
+  geom_smooth(method = lm, # line model
+              formula = y ~ poly(x, degree = 3), # speicfy polynomial line
+              color = "midnightblue", 
+              size = 1.2, 
+              se = FALSE) +
+  xlab("package")
 ```
 
 OK, now it's your turn to go through the process one more time.
  
 Additional assignment components :
 6. Choose a new predictor variable (anything not involving package type) in this dataset.
+
+I am selecting the city_name variable to determine how well it is the predictor variable. 
+
 7. Determine its correlation with the outcome variable (price).  (Remember we calculated a correlation matrix last week)
+  
+```{r}
+
+#Correlation between price and other vars.
+print(cor(baked_pumpkins$city_name, # predictor
+          baked_pumpkins$price)) # outcome
+```
+
 8. Create and test a model for your new predictor:
   - Create a recipe
   - Build a model specification (linear or polynomial)
@@ -108,5 +142,60 @@ Additional assignment components :
   - Create a model by fitting the workflow
   - Evaluate model performance on the test data
   - Create a visualization of model performance
+```{r}
+# Specify a recipe
+city_pumpkins_recipe <- 
+  recipe(price ~ city_name, # y ~ x variables
+         data = pumpkins_train) %>% # specify data
+  step_integer(all_predictors(), zero_based = TRUE) %>% # data to numerical form 
+  step_poly(all_predictors(), degree = 4) # add polynomial effect
+
+# Create a model specification called poly_spec
+city_spec <- linear_reg() %>% # specify type of model
+  set_engine("lm") %>% # set to linear regression
+  set_mode("regression") # define as regression
+
+# Bundle recipe and model spec into a workflow
+city_wf <- workflow() %>% 
+  add_recipe(city_pumpkins_recipe) %>% 
+  add_model(city_spec)
+
+# Create a model by fitting the workflow
+city_wf_fit <- city_wf %>% 
+  fit(data = pumpkins_train) # use training data
+
+# Evaluate model performance on the test data
+city_results <- city_wf_fit %>% 
+  predict(new_data = pumpkins_test) %>% 
+  bind_cols(pumpkins_test %>% 
+              select(c(city_name, price))) %>% 
+  relocate(.pred, .after = last_col())
+
+metrics(data = city_results, truth = price, estimate = .pred)
+
+# Make a scatter plot
+city_results %>% 
+  ggplot(mapping = aes(x = city_name, y = price)) +
+  geom_point(size = 1.6) +
+  # Overlay a line of best fit
+  geom_line(aes(y = .pred), 
+            color = "orange", 
+            linewidth = 1.2) +
+  xlab("City Name")
+
+# Make a smoother scatter plot 
+city_results %>% 
+  ggplot(mapping = aes(x = city_name, y = price)) +
+  geom_point(size = 1.6) +
+  # Overlay a line of best fit
+  geom_smooth(method = lm, # line model
+              formula = y ~ poly(x, degree = 3), # speicfy polynomial line
+              color = "midnightblue", 
+              size = 1.2, 
+              se = FALSE) +
+  xlab("City Name")
+
+```
+
   
 Lab 2 due 1/24 at 11:59 PM
