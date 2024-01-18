@@ -22,8 +22,7 @@ The data you just loaded includes 1757 lines of data about the market for pumpki
 
 You are loading a pumpkin data set in order to ask questions of it:
 
-When is the best time to buy pumpkins?
-- date / price 
+When is the best time to buy pumpkins? - date / price
 
 What price can I expect of a case of miniature pumpkins?
 
@@ -88,14 +87,15 @@ pumpkins <- pumpkins %>%
 
 Let's take a look at pumpkins sales throughout the year.
 
-*Question 1:* Create a scatter plot using price on the y-axis and day on the x-axis.
+***Question 1:*** **Create a scatter plot using price on the y-axis and day on the x-axis.**
 
 ```{r}
-
 # Make a scatter plot of day and price
 ggplot(data = pumpkins) +
   geom_point(aes(x = day, 
                  y = price)) +
+  labs(x = "Day of the Year",
+       y = "Price") +
   theme_classic()
 
 ```
@@ -122,7 +122,7 @@ pumpkins %>% slice_head(n = 5)
 pumpkins %>% distinct(package)
 ```
 
-*Question* 2: Use a combination of dplyr::filter() and stringr::str_detect() to achieve what we want.
+***Question*** **2: Use a combination of dplyr::filter() and stringr::str_detect() to achieve what we want.**
 
 ```{r}
 # Retain only pumpkins with "bushel" in the package column
@@ -164,7 +164,6 @@ new_pumpkins %>%
 ## Data Visualization
 
 ```{r}
-
 # Set theme
 theme_set(theme_light())
 
@@ -174,13 +173,13 @@ new_pumpkins %>%
   geom_point(size = 1.6)
 ```
 
-*Question 3:* Is this a useful plot? Does anything about it surprise you?
+***Question 3:*** **Is this a useful plot? Does anything about it surprise you?**
 
 This plot is not very useful except to identify general trends. It seems as though there are two price points, though it is hard to identify if those belong to different groups. Also, whereas the fist plot had data from day 0 to 365, this plot only contains data from day 225 to 350. This is about the time that the pumpkin holidays are happening, so it makes sense.
 
 How do we make it more useful? To get charts to display useful data, you usually need to group the data somehow.
 
-*Question 4:* Group the pumpkins into groups based on the month column and then find the mean price for each month. Plot the results with a bar plot.
+***Question 4:*** **Group the pumpkins into groups based on the month column and then find the mean price for each month. Plot the results with a bar plot.**
 
 Hint: use dplyr::group_by() %\>% summarize()
 
@@ -205,7 +204,7 @@ pumpkins %>%
   ylab("Pumpkin Price")
 ```
 
-#Preprocessing data for modelling using recipes
+# Pre-processing data for modelling using recipes
 
 What if we wanted to predict the price of a pumpkin based on the city or package columns which are of type character? How could we find the correlation between, say, package and price?
 
@@ -262,9 +261,9 @@ baked_pumpkins %>%
 
 The processed data baked_pumpkins has all its predictors encoded confirming that indeed the preprocessing steps defined as our recipe will work as expected. This makes it harder for you to read but more intelligible for tidymodels. Take a look at how the observations have been mapped to numbers.
 
-*Question 5:* From looking at the baked_pumpkins tibble, how many total cities are represented in the data set?
+***Question 5:*** **From looking at the baked_pumpkins tibble, how many total cities are represented in the data set?**
 
-There are 10 total cities that are represented in the data set. Each of the cities has been assigned a value from 0 to 9. 
+There are 10 total cities that are represented in the data set. Each of the cities has been assigned a value from 0 to 9.
 
 baked_pumpkins is a data frame that we can perform computations on. For instance, let's try to find a good correlation between two variables to potentially build a good predictive model. We'll use the function cor() to do this.
 
@@ -273,7 +272,7 @@ baked_pumpkins is a data frame that we can perform computations on. For instance
 cor(baked_pumpkins$package, baked_pumpkins$price)
 ```
 
-*Question 6:* Calculate the correlation between pumpkin price and two other variables in the data set
+***Question 6:*** **Calculate the correlation between pumpkin price and two other variables in the data set**
 
 ```{r}
 #Correlation between price and other vars.
@@ -282,9 +281,9 @@ print(cor(baked_pumpkins$city_name, baked_pumpkins$price))
 print(cor(baked_pumpkins$variety, baked_pumpkins$price))
 ```
 
-*Question 7:* Which of these three variables is most highly correlated with price? Why might this be?
+***Question 7:*** **Which of these three variables is most highly correlated with price? Why might this be?**
 
-The variety is most highly correlated with price. This might be because variety has to do with the size of the pumpkin, and it makes sense that the sizes of the pumpkin will affect the price. 
+The variety is most highly correlated with price. This might be because variety has to do with the size of the pumpkin, and it makes sense that the sizes of the pumpkin will affect the price.
 
 Now let's visualize a correlation matrix of all the columns using the corrplot package.
 
@@ -403,7 +402,7 @@ Coefficient of Determination (usually known as R-squared or R2): A relative metr
 ```{r evaluate_lr}
 # Evaluate performance of linear regression
 metrics(data = lm_results,
-        truth = price,
+        truth = price, # variable that is being predicted
         estimate = .pred)
 ```
 
@@ -442,8 +441,8 @@ plot_results %>%
 
 Hmm. The model does not do good job of generalizing the relationship between a package and its corresponding price.
 
-*Question 8:* What issues do you see with fitting a linear regression to this data?
+***Question 8:*** **What issues do you see with fitting a linear regression to this data?**
 
-Fitting a line to this data is not great because the data is categorical.
+Fitting a line to this data is not great because the data is categorical, and this model is underfitting the data. There are a lot of points that are not represented by the model, and a quadratic line may fit the data better. 
 
 Congratulations, you just created a model that can help predict the price of a few varieties of pumpkins. But you can probably create a better model! To be continued next week...
