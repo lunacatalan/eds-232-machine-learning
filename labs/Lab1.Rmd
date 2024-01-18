@@ -319,8 +319,9 @@ To do this, we'll first split the data. Data splitting is a key part of the mach
 
 ```{r}
 set.seed(123)
+
 # Split the data into training and test sets
-pumpkins_split <- new_pumpkins %>% 
+pumpkins_split <- baked_pumpkins %>% 
   initial_split(prop = 0.8) # set the data proportion
 
 
