@@ -443,6 +443,6 @@ Hmm. The model does not do good job of generalizing the relationship between a p
 
 ***Question 8:*** **What issues do you see with fitting a linear regression to this data?**
 
-Fitting a line to this data is not great because the data is categorical, and this model is underfitting the data. There are a lot of points that are not represented by the model, which means that using this model would not lead to very accurate predictions for prices. 
+Fitting a line to this data is not great because the data is categorical, and this model is underfitting the data. There are a lot of points that are not represented by the model, which means that using this model would not lead to very accurate predictions for prices based on the package the pumpkins come in. 
 
 Congratulations, you just created a model that can help predict the price of a few varieties of pumpkins. But you can probably create a better model! To be continued next week...
