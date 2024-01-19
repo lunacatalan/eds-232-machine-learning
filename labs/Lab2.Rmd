@@ -67,7 +67,7 @@ metrics(data = poly_results, truth = price, estimate = .pred)
 ```
 Question 3: How do the performance metrics differ between the linear model from last week and the polynomial model we fit today?  Which model performs better on predicting the price of different packages of pumpkins?
 
-The performance metrics for the polynomial model are more accurate than the metrics for the linear model. The .estimate values for the polynomical model are smaller than the values for the linear model. The polynomial model therefore performs better because it is predicting the values to a more accurate degree. 
+The performance metrics for the polynomial model are more accurate than the metrics for the linear model. The .estimate values for the polynomial model are smaller than the values for the linear model. The polynomial model therefore performs better because it is predicting the values to a more accurate degree. 
 
 Let's visualize our model results.  First prep the results by binding the encoded package variable to them.
 ```{r}
@@ -150,7 +150,7 @@ city_pumpkins_recipe <-
   step_integer(all_predictors(), zero_based = TRUE) %>% # data to numerical form 
   step_poly(all_predictors(), degree = 4) # add polynomial effect
 
-# Create a model specification called poly_spec
+# Build a model specification called poly_spec
 city_spec <- linear_reg() %>% # specify type of model
   set_engine("lm") %>% # set to linear regression
   set_mode("regression") # define as regression
@@ -171,30 +171,41 @@ city_results <- city_wf_fit %>%
               select(c(city_name, price))) %>% 
   relocate(.pred, .after = last_col())
 
-metrics(data = city_results, truth = price, estimate = .pred)
+metrics(data = city_results, # test data 
+        truth = price, # predicted variable
+        estimate = .pred)
+```
+
+
+```{r}
+# Create a visualization of model performance
+library(patchwork)
 
 # Make a scatter plot
-city_results %>% 
+city_plot <- city_results %>% 
   ggplot(mapping = aes(x = city_name, y = price)) +
   geom_point(size = 1.6) +
   # Overlay a line of best fit
   geom_line(aes(y = .pred), 
             color = "orange", 
             linewidth = 1.2) +
-  xlab("City Name")
+  xlab("City Name (numerical)") +
+  ylab("Price")
 
 # Make a smoother scatter plot 
-city_results %>% 
+city_poly_smooth <- city_results %>% 
   ggplot(mapping = aes(x = city_name, y = price)) +
   geom_point(size = 1.6) +
   # Overlay a line of best fit
   geom_smooth(method = lm, # line model
-              formula = y ~ poly(x, degree = 3), # speicfy polynomial line
+              formula = y ~ poly(x, degree = 3), # specify polynomial line
               color = "midnightblue", 
               size = 1.2, 
               se = FALSE) +
-  xlab("City Name")
+  xlab("City Name (numerical)") +
+  ylab("Price")
 
+city_plot + city_poly_smooth
 ```
 
   

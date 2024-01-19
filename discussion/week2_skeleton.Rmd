@@ -215,6 +215,7 @@ test_predict <- predict(object = fish_wf_fit,
 
 head(test_predict)
 ```
+Lower values for the RMSE are better... but it depends on what the units are.
 
 #### Model Metrics and Evaluation
 
