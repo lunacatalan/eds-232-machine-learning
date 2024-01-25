@@ -51,6 +51,10 @@ baked_pumpkins <- bake(pumpkins_prep, # use the prepped version
 
 set.seed(123)
 
+# ---------------
+#.       Set Up Data
+# ---------------
+
 # Split the data into training and test sets
 pumpkins_split <- baked_pumpkins %>% 
   initial_split(prop = 0.8) # set the data proportion
@@ -221,7 +225,7 @@ poly_results %>%
 
 OK, now it's your turn to go through the process one more time. Additional assignment components :
 
-6. Choose a new predictor variable (anything not involving package type) in this dataset.
+6.  Choose a new predictor variable (anything not involving package type) in this dataset.
 
 I am selecting the `city_name` variable to determine how well it is the predictor variable.
 
