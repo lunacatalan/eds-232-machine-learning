@@ -10,6 +10,8 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(rsample)
 library(glmnet)
+library(patchwork)
+library(sjPlot)
 ```
 
 ## Lab 3: Predicting the age of abalone
@@ -84,14 +86,17 @@ ab_ridge <- cv.glmnet(
   x = X,
   y = Y,
   alpha = 0
-) %>% 
+)
+
+ab_ridge %>% 
   plot(main = "Ridge penalty")
 
 ab_lasso <- cv.glmnet(
   x = X,
   y = Y,
   alpha = 1
-) %>%  
+) 
+ab_lasso %>% 
   plot(main = "Lasso penalty")
 
 ```
@@ -99,12 +104,64 @@ ab_lasso <- cv.glmnet(
 
 -   ***Question 5***. Interpret the graphs. What is being displayed on the axes here? How does the performance of the models change with the value of lambda?
 
+The graphs are showing model performance as a function of lambda. On the x axis, the graph is showing the value of lambda. On the y-axis is Mean-squared error (MSE). For both graphs, as lambda increases, the MSE increases, and therefore the model performance decreases. The first dotted line represents the value of lambda that gives you the lowest mean squared error. The second dotted line identifies the value of lambda where the model has the fewest number of variables. 
+
+For the Ridge penalty model, the lambda value that minimizes MSE and where the model has the fewest number of variables is -1. For the Lasso penalty model that minimizes the MSE and has the fewest number of variables is a large range between -3 and less than -7. 
+
 -   ***Question 6***. Inspect the ridge model object you created with cv.glmnet(). The \$cvm column shows the MSEs for each CV fold. What is the minimum MSE? What is the value of lambda associated with this MSE minimum?
 
+```{r}
+
+# minimum MSE 
+min_mse <- min(ab_ridge$cvm)
+
+# print lambda when MSE is minimized
+min_lam <- ab_ridge$lambda.min
+
+```
+The minimum MSE for the ridge model is `r {min_mse}` and the lambda value associated with the MSE minimum is `r {min_lam}`.
+
 -   ***Question 7***. Do the same for the lasso model. What is the minimum MSE? What is the value of lambda associated with this MSE minimum?
+
+```{r}
+# minimum MSE 
+min_mse_2 <- min(ab_lasso$cvm)
+
+# print lambda when MSE is minimized
+min_lam_2 <- ab_lasso$lambda.min
+```
+The minimum MSE for the lasso model is `r {min_mse_2}` and the lambda value associated with the MSE minimum is `r {min_lam_2}`.
 
 Data scientists often use the "one-standard-error" rule when tuning lambda to select the best model. This rule tells us to pick the most parsimonious model (fewest number of predictors) while still remaining within one standard error of the overall minimum cross validation error. The cv.glmnet() model object has a column that automatically finds the value of lambda associated with the model that produces an MSE that is one standard error from the MSE minimum (\$lambda.1se).
 
 -   ***Question 8.*** Find the number of predictors associated with this model (hint: the \$nzero is the \# of predictors column).
+```{r}
+# when looking at the predictors column, select the lambda that produces MSE 1se from the minimum
+lasso_pred <- ab_lasso$nzero[ab_lasso$lambda == ab_lasso$lambda.1se]
+
+# when looking at the predictors column, select the lambda that produces MSE 1se from the minimum
+ridge_pred <- ab_ridge$nzero[ab_ridge$lambda == ab_ridge$lambda.1se]
+```
+
+The number of predictors in the lasso model is `r {lasso_pred }`, which is less than the total number because it performs selection on the predictors to minimize the number needed in the model. The number of predictors in the ridge model is `r {ridge_pred}`, and it includes all the columns in the data set. This makes sense since ridge regression does not perform feature selection and keeps all predictors. 
 
 -   ***Question 9*****.** Which regularized regression worked better for this task, ridge or lasso? Explain your answer.
+```{r}
+set.seed(1)
+
+X_test <- model.matrix(Rings ~ ., data = ab_test)[,-1] # make all variables predictors
+
+# assign Predictor variable
+Y_test <- ab_test$Rings
+
+# cross validation for lasso 
+bestlam_lasso = ab_lasso$lambda.min # Select lamda that minimizes training MSE
+lasso_pred = predict(ab_lasso, s = bestlam_lasso, newx = X_test) # Use best lambda to predict test data
+mean((lasso_pred - Y_test)^2) # Calculate test MSE
+
+# cross validation for ridge 
+bestlam_ridge = ab_ridge$lambda.min # Select lamda that minimizes training MSE
+ridge_pred = predict(ab_ridge, s = bestlam_ridge, newx = X_test) # Use best lambda to predict test data
+mean((ridge_pred - Y_test)^2) # Calculate test MSE
+```
+
