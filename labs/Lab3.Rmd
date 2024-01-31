@@ -155,13 +155,15 @@ X_test <- model.matrix(Rings ~ ., data = ab_test)[,-1] # make all variables pred
 Y_test <- ab_test$Rings
 
 # cross validation for lasso 
-bestlam_lasso = ab_lasso$lambda.min # Select lamda that minimizes training MSE
-lasso_pred = predict(ab_lasso, s = bestlam_lasso, newx = X_test) # Use best lambda to predict test data
-mean((lasso_pred - Y_test)^2) # Calculate test MSE
+bestlam_lasso <- ab_lasso$lambda.min # Select lamda that minimizes training MSE
+lasso_pred <- predict(ab_lasso, s = bestlam_lasso, newx = X_test) # Use best lambda to predict test data
+lasso_mse <- mean((lasso_pred - Y_test)^2) # Calculate test MSE
 
 # cross validation for ridge 
-bestlam_ridge = ab_ridge$lambda.min # Select lamda that minimizes training MSE
-ridge_pred = predict(ab_ridge, s = bestlam_ridge, newx = X_test) # Use best lambda to predict test data
-mean((ridge_pred - Y_test)^2) # Calculate test MSE
+bestlam_ridge <- ab_ridge$lambda.min # Select lamda that minimizes training MSE
+ridge_pred <- predict(ab_ridge, s = bestlam_ridge, newx = X_test) # Use best lambda to predict test data
+ridge_mse <- mean((ridge_pred - Y_test)^2) # Calculate test MSE
+
 ```
 
+For this task, the lasso model works slightly better for predicting the age of abalone. This can be determined by comparing the MSE for the ridge and lasso. The lasso model has a smaller MSE output (lasso:`r {min_mse_2}` vs ridge:`r {min_mse}`). Also, the lasso uses less coefficients (6 vs 10), which makes it a simpler model. The more simple model and the lower MSE makes the lasso better than the ridge model to predict the age of abalone. 
