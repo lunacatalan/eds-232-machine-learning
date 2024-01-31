@@ -1,8 +1,10 @@
 ---
 title: "HerschenfeldCatalan_Lab3"
-author: "Luna Herschenfeld-Catalán"
-date: "2023-01-24"
-output: pdf_document
+author: 'Luna Herschenfeld-Catalan'
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -146,7 +148,11 @@ ridge_pred <- ab_ridge$nzero[ab_ridge$lambda == ab_ridge$lambda.1se]
 The number of predictors in the lasso model is `r {lasso_pred }`, which is less than the total number because it performs selection on the predictors to minimize the number needed in the model. The number of predictors in the ridge model is `r {ridge_pred}`, and it includes all the columns in the data set. This makes sense since ridge regression does not perform feature selection and keeps all predictors. 
 
 -   ***Question 9*****.** Which regularized regression worked better for this task, ridge or lasso? Explain your answer.
-```{r}
+
+For this task, the lasso model works slightly better for predicting the age of abalone. This can be determined by comparing the MSE for the ridge and lasso. The lasso model has a smaller MSE output (lasso: `r {min_mse_2}` vs ridge: `r {min_mse}`). Also, the lasso uses less coefficients (6 vs 10), which makes it a simpler model. The more simple model and the lower MSE makes the lasso better than the ridge model to predict the age of abalone.
+
+Attempt at running model on test data:
+```{r eval = FALSE}
 set.seed(1)
 
 X_test <- model.matrix(Rings ~ ., data = ab_test)[,-1] # make all variables predictors
@@ -166,4 +172,3 @@ ridge_mse <- mean((ridge_pred - Y_test)^2) # Calculate test MSE
 
 ```
 
-For this task, the lasso model works slightly better for predicting the age of abalone. This can be determined by comparing the MSE for the ridge and lasso. The lasso model has a smaller MSE output (lasso:`r {min_mse_2}` vs ridge:`r {min_mse}`). Also, the lasso uses less coefficients (6 vs 10), which makes it a simpler model. The more simple model and the lower MSE makes the lasso better than the ridge model to predict the age of abalone. 
