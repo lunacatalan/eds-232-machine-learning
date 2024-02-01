@@ -1,0 +1,183 @@
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(tidymodels)
+library(spData)
+library(ggpmisc)
+```
+
+```{r}
+redlining = read_csv(here::here("discussion", "redlining.csv")) %>% 
+  left_join(us_states_df %>% rename(name = state)) %>% 
+  janitor::clean_names()
+```
+
+```{r}
+ggplot(redlining) +
+  geom_boxplot(aes(x = region, y = percent), 
+                   fill = "transparent")
+
+```
+
+```{r}
+ggplot(redlining) +
+  geom_point(aes(x = median_income_10, y = percent))
+```
+
+```{r}
+ggplot(redlining) +
+  geom_point(aes(x = poverty_level_10, y = percent))
+
+```
+
+```{r}
+ggplot(redlining) +
+  geom_boxplot(aes(x = region, y = percent), 
+                   fill = "transparent") +
+  geom_point(aes(x = region, y = percent))
+```
+
+```{r}
+ggplot(redlining) +
+  geom_point(aes(x = area, y = percent))
+```
+
+### Data Splitting
+
+```{r}
+
+red_split <- initial_split(redlining, prop = 0.7)
+
+red_train <- training(red_split)
+red_test <- testing(red_split)
+
+# create subsets for cross validation 
+folds <- vfold_cv(red_train, # use training data
+                  v = 5, # number of folds; partitions
+                  repeats = 2) # how many times it does the partitions
+```
+
+### Recipe Specification
+
+```{r}
+recipe <- recipe(percent ~ region + area + total_pop_10 + median_income_10 + poverty_level_10, # variables of interest
+                 data = red_train) %>% # use training data 
+  step_normalize(all_numeric_predictors()) %>% 
+  step_integer(all_nominal_predictors()) %>% 
+  # interactions within recipes
+  step_interact(terms = ~total_pop_10:median_income_10) %>%
+  step_interact(terms = ~total_pop_10:poverty_level_10) %>% 
+  step_interact(terms = ~poverty_level_10:median_income_10) 
+```
+
+### Model: Tuned Linear Regression
+
+```{r}
+# create model 
+lm_model <- linear_reg(penalty = tune(),
+                       mixture = tune()) %>% # specify tune() to the model we will apply
+  set_engine("glmnet") %>%  # set regression engine
+  set_mode("regression")
+
+```
+
+```{r}
+# create workflow 
+lm_workflow <- workflow() %>% 
+  add_model(lm_model) %>% # specify the model 
+  add_recipe(recipe)
+
+```
+
+```{r}
+?tune_grid
+```
+
+```{r, eval = FALSE}
+lm_cv_tune = lm_workflow %>% 
+  tune_grid(resamples = folds,
+            grid = 5) # specify number of lambdas that you're testing
+
+```
+
+```{r}
+?collect_metrics #from tune
+```
+
+```{r}
+# values of penalty mixtores and parameters tested
+# look at rmse --> lowest one is better
+collect_metrics(lm_cv_tune)
+```
+
+```{r}
+autoplot(lm_cv_tune) +
+  theme_bw() +
+  labs(x = "Parameter",
+       y = "Performance Metric")
+
+# select the Parameter with lowest rmse / highest R2
+```
+
+#### Finalize workflow
+
+```{r}
+?show_best
+?finalize_workflow()
+```
+
+```{r}
+lm_best <- show_best(lm_cv_tune, 
+                     n = 1,
+                     metric = "rmse")
+
+lm_final <- finalize_workflow(lm_workflow, select_best(lm_cv_tune, metric = "rmse"))
+
+lm_final
+```
+
+### Model Fitting
+
+```{r, include=FALSE}
+ # fit the data to the training data
+lm_fit <- fit(lm_final, red_train) 
+```
+
+```{r, include=FALSE}
+# fro training score to see how model is doing on training data
+train_predict <- predict(lm_fit, red_train) %>% 
+  bind_cols(red_train)
+
+test_predict <- predict(lm_fit, red_test) %>% 
+  bind_cols(red_test)
+```
+
+```{r}
+train_metrics <- train_predict %>% 
+  metrics(percent, .pred)
+
+train_metrics
+
+test_metrics <- test_predict %>% 
+  metrics(percent, .pred)
+
+# the test metric is almost 2x the training metric, which is poor. Also, the r2 of the test is almost 1/2, which is poor.
+test_metrics 
+```
+
+### Visualization
+
+```{r}
+
+ggplot(test_predict, # use testing data
+       aes(x = percent, y = .pred)) +
+  geom_point() +
+  stat_poly_line() +
+  stat_poly_eq(label.y = 0.9) +
+  stat_poly_eq(use_label("eq"))
+
+# get R2 of testing data 
+
+```
+
