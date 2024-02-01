@@ -55,7 +55,8 @@ ab_test <- testing(ab_split)
 
 ```{r}
 
-X <- model.matrix(Rings ~ ., data = ab_train)[,-1] # make all variables predictors
+X <- model.matrix(Rings ~ ., # make all variables predictors
+                  data = ab_train)[,-1] 
 
 # assign Predictor variable
 Y <- ab_train$Rings
@@ -84,20 +85,25 @@ In lecture we learned about two methods of estimating our model's generalization
 ```{r}
 par(mfrow = c(1, 2))
 
-ab_ridge <- cv.glmnet(
+# cross validation 
+ab_ridge <- cv.glmnet( 
   x = X,
   y = Y,
   alpha = 0
 )
 
+# plot ridge regression
 ab_ridge %>% 
   plot(main = "Ridge penalty")
 
+# cross validation 
 ab_lasso <- cv.glmnet(
   x = X,
   y = Y,
   alpha = 1
 ) 
+
+# plot lasso regression
 ab_lasso %>% 
   plot(main = "Lasso penalty")
 
@@ -132,6 +138,7 @@ min_mse_2 <- min(ab_lasso$cvm)
 # print lambda when MSE is minimized
 min_lam_2 <- ab_lasso$lambda.min
 ```
+
 The minimum MSE for the lasso model is `r {min_mse_2}` and the lambda value associated with the MSE minimum is `r {min_lam_2}`.
 
 Data scientists often use the "one-standard-error" rule when tuning lambda to select the best model. This rule tells us to pick the most parsimonious model (fewest number of predictors) while still remaining within one standard error of the overall minimum cross validation error. The cv.glmnet() model object has a column that automatically finds the value of lambda associated with the model that produces an MSE that is one standard error from the MSE minimum (\$lambda.1se).
@@ -151,7 +158,7 @@ The number of predictors in the lasso model is `r {lasso_pred }`, which is less 
 
 For this task, the lasso model works slightly better for predicting the age of abalone. This can be determined by comparing the MSE for the ridge and lasso. The lasso model has a smaller MSE output (lasso: `r {min_mse_2}` vs ridge: `r {min_mse}`). Also, the lasso uses less coefficients (6 vs 10), which makes it a simpler model. The more simple model and the lower MSE makes the lasso better than the ridge model to predict the age of abalone.
 
-Attempt at running model on test data:
+Attempt at running model on test data abd evaluatin results:
 ```{r eval = FALSE}
 set.seed(1)
 
