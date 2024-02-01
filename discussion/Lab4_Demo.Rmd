@@ -1,0 +1,114 @@
+---
+title: "Lab4_Demo"
+author: "Mateo Robbins"
+date: "2024-01-30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)     # for data wrangling
+library(ggplot2)   # for awesome plotting
+library(rsample)   # for data splitting
+library(recipes)   # data preprocessing
+library(caret)     # for logistic regression modeling
+```
+Let's explore how employee income and overtime hours worked affect likelihood of employee attrition.  Any predictions?
+
+```{r}
+#
+data("attrition", package = "modeldata")
+
+df <- attrition %>% 
+  mutate_if(is.ordered, factor, ordered = FALSE)
+
+# Create training (70%) and test (30%) sets for the 
+# rsample::attrition data.
+set.seed(123)  # for reproducibility 
+churn_split <- initial_split(df, prop = 0.7)
+churn_train <- training(churn_split)
+churn_test  <- testing(churn_split)
+```
+
+Let's set up set up our recipes now for preprocessing. 
+```{r recipe}
+#specify and prep recipe
+churn_rec <- recipe(Attrition ~ ., data = churn_train) %>% # set recipe
+  step_integer(Attrition, zero_based = T) %>% # make attrition into 0/1 form
+  prep(churn_train)
+
+#bake recipe with training data
+churn_baked_train <- bake(churn_rec, # object with recipe
+                          new_data = churn_train) # df that the preprocessing will be applied
+```
+
+# Created 2 models to predict attrition
+
+```{r specify_models_glm}
+#MonthlyIncome
+model_inc <- glm(data = churn_baked_train, 
+                 Attrition ~ MonthlyIncome, 
+                 family = "binomial") # because outcome variable is binary
+  
+#OverTime
+model_time <- glm(data = churn_baked_train, 
+                 Attrition ~ OverTime, 
+                 family = "binomial") # because outcome variable is binary
+```
+
+
+```{r tidy_model_objs}
+broom::tidy(model_inc)
+broom::tidy(model_time)
+
+```
+Hard to interpret the coefficients. How does this impact the likelihood of attrition? We can exponentiate the coefficients, so that we can understand the difference in the predictor variables. 
+
+The odds of an employee attriting, according to the output of `exp(coef(model_inc))` increase by 0.999 for every additional dollar. Since this is less than 1, the odds are decreasing. This is because you are multiplying the `exp`. 
+
+For the overtime, the odds of an employee attriting increases by 3.48 when an employee has worked overtime. This means that when employees are working overtime, the odds of them leaving increase.   
+
+```{r exp_coefs}
+#exponentiate the coefficients from model objects for interpretation. Gives us changes in odds of attrition
+exp(coef(model_inc))
+
+exp(coef(model_time))
+```
+
+# See how model performs on test data 
+
+```{r recode_attrition_test}
+# apply recipe to test data
+churn_baked_test <- bake(churn_rec, 
+                         new_data = churn_test)
+```
+
+```{r plot_income_attrition}
+ggplot(churn_baked_test, aes(x = MonthlyIncome, y = Attrition)) +
+  geom_point() +
+  stat_smooth(method = "glm", 
+              se = T,
+              method.args = list(family = "binomial"))
+
+```
+
+We can add more predictors, creating a multiple logistic regression model
+
+```{r mult_log_regression}
+model_both <- glm(Attrition ~ MonthlyIncome + OverTime, family = "binomial",
+                  data = churn_train)
+
+broom::tidy(model_both)
+```
+
+```{r}
+# representing what model_both is representing 
+ggplot(churn_baked_test, 
+       aes(x = MonthlyIncome, y = Attrition, color = OverTime)) +
+  geom_point(alpha = 0.5) +
+  stat_smooth(method = "glm", 
+              se = F,
+              method.args = list(family = "binomial"))
+```
+
+
