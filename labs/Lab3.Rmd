@@ -3,8 +3,8 @@ title: "HerschenfeldCatalan_Lab3"
 author: 'Luna Herschenfeld-Catalan'
 date: "`r Sys.Date()`"
 output:
-  html_document: default
   pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
