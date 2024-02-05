@@ -52,10 +52,10 @@ red_split <- initial_split(redlining, prop = 0.7)
 red_train <- training(red_split)
 red_test <- testing(red_split)
 
-# create subsets for cross validation 
+`# create subsets for cross validation 
 folds <- vfold_cv(red_train, # use training data
                   v = 5, # number of folds; partitions
-                  repeats = 2) # how many times it does the partitions
+                  repeats = 2) # how many times it does the partitions`
 ```
 
 ### Recipe Specification
