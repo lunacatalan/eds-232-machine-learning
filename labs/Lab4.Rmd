@@ -26,16 +26,17 @@ Outcome variable: *yr1status* = tree status (0=alive, 1=dead) assessed one year 
 
 Predictors: *YrFireName, Species, Genus_species, DBH_cm, CVS_percent, BCHM_m, BTL* (Information on these variables available in the database metadata ([link](https://www.fs.usda.gov/rds/archive/products/RDS-2020-0001-2/_metadata_RDS-2020-0001-2.html))).
 
-```{r}
+```{r warning=FALSE, message=FALSE}
 trees_dat<- read_csv(file = "https://raw.githubusercontent.com/MaRo406/eds-232-machine-learning/main/data/trees-dat.csv")
 ```
 ### Data Splitting
 > Question 1: Recode all the predictors to a zero_based integer form
 > Question 2: Create trees_training (70%) and trees_test (30%) splits for the modeling
 
-```{r}
+```{r warning=FALSE, message=FALSE}
 set.seed(23)
 
+# split the data into training and test sets
 trees_split <- initial_split(trees_dat, prop = 0.7) # create training and test data
 trees_train <- training(trees_split)
 trees_test <- testing(trees_split)
@@ -54,8 +55,10 @@ trees_baked_train <- bake(trees_recipe,
 
 The training data contains 25,246 observations. 
 
-```{r}
+```{r warning=FALSE, message=FALSE}
+# check the number of observations 
 dim(trees_train)
+
 ```
 
 
@@ -65,7 +68,7 @@ Let's start our modeling effort with some simple models: one predictor and one o
 
 > Question 4: Choose the three predictors that most highly correlate with our outcome variable for further investigation.
 
-```{r}
+```{r warning=FALSE, message=FALSE}
 # Obtain correlation matrix
 corr_mat <- cor(trees_baked_train)
 
@@ -83,12 +86,19 @@ Based on our correlation matrix, the variables that are most correlated with the
 
 > Question 5: Use glm() to fit three simple logistic regression models, one for each of the predictors you identified.
 
-```{r}
-mod1 <- glm(yr1status ~ CVS_percent, data = trees_train, family = "binomial")
+```{r warning=FALSE, message=FALSE}
 
-mod2 <- glm(yr1status ~ BCHM_m, data = trees_train, family = "binomial")
+mod1 <- glm(yr1status ~ CVS_percent, # formula with predicted ~ predictor
+            data = trees_train, # use training data
+            family = "binomial") # use binomial since the outcome is binary
 
-mod3 <- glm(yr1status ~ DBH_cm, data = trees_train, family = "binomial")
+mod2 <- glm(yr1status ~ BCHM_m, 
+            data = trees_train, 
+            family = "binomial")
+
+mod3 <- glm(yr1status ~ DBH_cm, 
+            data = trees_train, 
+            family = "binomial")
 ```
 
 
@@ -98,17 +108,17 @@ We aren't always interested in or able to interpret the model coefficients in a 
 
 > Question 6: That said, take a stab at interpreting our model coefficients now.
 
-```{r}
+```{r warning=FALSE, message=FALSE}
 tab_model(mod1)
 tab_model(mod2)
 tab_model(mod3)
 ```
 
-For the first model, the coefficient for CVS percent is 1.08, with a p-value of less than 0.001. This can be understood that we are over 99% confidence that for every 1 percent increase in crown volume scorched (CVS), the odds of the tree status 1 year post fire being dead increases by 1.08. For the second model, the coefficient for BCHM_m is 1.24, with a p-value of less than 0.001. This can be understood that we are over 99% confident that for every 1 meter vertical increase of maximum bark char height from the ground, the odds of the tree status 1 year post fire being dead increases by 1.24. For the third model, the coefficient for DBH_cm is 0.94, with a p-value of less than 0.001. This can be understood that we are over 99% confident that for every 1 centimeter increase of diameter, the odds of the tree status 1 year post fire being dead increases by 0.94. Since this is less than 1, the odds are decreasing as the diameter of the tree increases. 
+For the first model, the coefficient for CVS percent is 1.08, with a p-value of less than 0.001. This can be understood that we are over 99% confidence that for every 1 percent increase in crown volume scorched (CVS), the odds of the tree status 1 year post fire being dead increases by 1.08. For the second model, the coefficient for BCHM_m is 1.24, with a p-value of less than 0.001. This can be understood that we are over 99% confident that for every 1 meter vertical increase of maximum bark char height from the ground, the odds of the tree status 1 year post fire being dead increases by 1.24. For the third model, the coefficient for DBH_cm is 0.94, with a p-value of less than 0.001. This can be understood that we are over 99% confident that for every 1 centimeter increase of diameter, the odds of the tree status 1 year post fire being dead increases by 0.94. Since this is less than 1, the odds of being dead are decreasing as the diameter of the tree increases. 
 
 > Question 7: Now let's visualize the results from these models. Plot the fit to the training data of each model.
 
-```{r}
+```{r warning=FALSE, message=FALSE}
 ggplot(trees_baked_train, aes(x = CVS_percent, y = yr1status)) +
   geom_point() +
   stat_smooth(method = "glm", 
@@ -135,14 +145,12 @@ Let's not limit ourselves to a single-predictor model. More predictors might lea
 
 > Question 8: Use glm() to fit a multiple logistic regression called "logistic_full", with all three of the predictors included. Which of these are significant in the resulting model?
 
-All three of these variables are significant in the resulting model. 
+All three of these variables are significant in the resulting model. The p-values for each variable are significant well above a 95% confidence level.
 
-```{r}
+```{r warning=FALSE, message=FALSE}
 logistic_full <- glm(yr1status ~ CVS_percent + BCHM_m + DBH_cm, 
                      data = trees_train, 
                      family = "binomial") 
-
-summary(logistic_full)
 
 broom::tidy(logistic_full)
 
@@ -155,11 +163,12 @@ Now we want to estimate our model's generalizability using resampling.
 
 > Question 9: Use cross validation to assess model accuracy. Use caret::train() to fit four 10-fold cross-validated models (cv_model1, cv_model2, cv_model3, cv_model4) that correspond to each of the four models we've fit so far: three simple logistic regression models corresponding to each of the three key predictors (CVS_percent, DBH_cm, BCHM_m) and a multiple logistic regression model that combines all three predictors.
 
-```{r eval = FALSE}
+```{r warning=FALSE, message=FALSE}
+# make the yr1status column into a factor
 trees_train$yr1status <- as.factor(trees_train$yr1status)
 
 # create subsets for cross validation 
-ctrl <- trainControl(method = "cv",
+ctrl <- trainControl(method = "cv", # set method as cross validation
                      number = 10) # default number of k-folds
 
 set.seed(123)
@@ -191,7 +200,9 @@ cv_model4 <- caret::train(yr1status ~ CVS_percent + BCHM_m + DBH_cm,
 
 > Question 10: Use caret::resamples() to extract then compare the classification accuracy for each model. (Hint: resamples() wont give you what you need unless you convert the outcome variable to factor form). Which model has the highest accuracy?
 
-```{r}
+The mean accuracy for each model is 0.896 for the first model (CVS_percent), 0.7722 for the second model (BCHM_m), 0.7488 for the third model (DBH_cm), and 0.9026 for the 4th model that used all 3 variables as predictors. Therefore, the model with the highest accuracy was Model 4, the multiple logistic regression model with an average accuracy of 90%.  
+
+```{r warning=FALSE, message=FALSE}
 
 # extract sample performance 
 summary(caret::resamples(
@@ -212,17 +223,27 @@ Let's move forward with this single most accurate model.
 
 > Question 11: Compute the confusion matrix and overall fraction of correct predictions by the model.
 
-```{r}
-predicted <- predict(cv_model4, trees_train)
+The model had 16466 true positives, and 6326 true negatives, for a total of 22792 correct predictions. The model had 835 false negatives, and 1619 false positives, for a total of 2454 incorrect predictions. The overall fraction of correct predictions is 0.892. 
+
+```{r warning=FALSE, message=FALSE}
+# use the model to predict values based on training data
+predicted <- predict(cv_model4, # model specified
+                     trees_train)
 
 # create confusion matrix
-confusionMatrix(data = predicted, 
+results <- confusionMatrix(data = predicted, 
                 reference = trees_train$yr1status)
+
+results
 ```
 
 > Question 12: Explain what the confusion matrix is telling you about the types of mistakes made by logistic regression.
->
+
+The confusion matrix is telling us about the number of true negatives/positives and false negative/positives. The mistakes made by the logistic regression are when the model predicts that a tree is dead, but in the real data set it is alive (P:1, A:0; that is a false positive), or the model predicts that a tree is alive, but in the real data set it is dead (P:0, A:1; that is a false negative). 
+
 > Question 13: What is the overall accuracy of the model? How is this calculated?
+
+The overall accuracy of the model is (16466 + 6326) / (1619 + 6326 + 16466 + 835), which is the number of true neg + true pos divided by the total number of observations. This equals 0.9028, which is equal to an accuracy of 90.28%. 
 
 ### Test Final Model
 
@@ -251,5 +272,6 @@ confusionMatrix(data = predicted_test_df,
 
 ```
 
-
 > Question 15: How does the accuracy of this final model on the test data compare to its cross validation accuracy? Do you find this to be surprising? Why or why not?
+
+The accuracy of this model on the test data is 0.9073, which makes it 90.73% accuracy. This is surprising because it is performing equal, if not a fraction of a percent better on the test data than on the training data (90.28%) . I would expect it to perform a little worse since it on unseen data. However, the idea of using training and test data is that the training data is an accurate representation of the entire data set, so we hope that the model we created on the training data is able to predict with equal accuracy on the test data. 
