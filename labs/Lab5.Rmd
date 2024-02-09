@@ -108,7 +108,7 @@ saved_clean_luna <- saved_df %>%
   mutate(artist_id = as.character(row_number())) %>% 
   relocate(artist_id, .before = added_at) %>% 
   left_join(saved_artist_df) %>% 
-  select()
+  select() # select the columns we want!
 ```
 
 
