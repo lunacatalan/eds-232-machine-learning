@@ -63,6 +63,7 @@ For example: What are the most danceable tracks in your dataset? What are some d
 index_seq = seq(0, 300, 16)
 saved_tracks_df = data.frame()
 
+# create function to access 300 saved tracks
 saved_tracks <- function(AC) {
   
   index_seq = seq(0, 300, 16)
@@ -89,7 +90,27 @@ Create competing models that predict whether a track belongs to:
 
 Option 1. you or your partner's collection
 
-Option 2. genre 1 or genre 2
+```{r}
+# clean the data 
+saved_artists <- saved_df[[2]]
+artist_df = data.frame()
+
+## These do the same thing:
+# get artist names from the column of dataframes
+for (artist in saved_artists) {
+  artists <- artist
+  artist_df <- rbind(artist_df, artists)
+}
+
+saved_artist_df <- bind_rows(saved_artists, .id = "artist_id")
+
+saved_clean_luna <- saved_df %>% 
+  mutate(artist_id = as.character(row_number())) %>% 
+  relocate(artist_id, .before = added_at) %>% 
+  left_join(saved_artist_df) %>% 
+  select()
+```
+
 
 You will eventually create four final candidate models:
 
