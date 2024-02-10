@@ -81,6 +81,28 @@ saved_tracks <- function(AC) {
 }
 
 saved_df <- saved_tracks(authorization_code)
+
+# track_df <- saved_df %>% 
+#   select(track.name, track_id = track.id)
+```
+
+
+```{r}
+sam_df <- read_csv(here::here("labs", "data", "sam_audio.csv")) %>% 
+  select(-track.name) %>% 
+  mutate(partner_id = "Sam")
+  
+luna_audio <- get_track_audio_features(saved_df$track.id[101:200])
+
+luna_df <- get_track_audio_features(saved_df$track.id[1:100]) %>% 
+  rbind(luna_audio) %>% 
+  mutate(partner_id = "Luna")
+
+features_df <- rbind(luna_df, sam_df) %>% 
+  mutate_if(is.ordered, .funs = factor, ordered = F) %>% 
+  select(-type, -id, -uri, -track_href, -analysis_url) %>% 
+  mutate(partner_id = as.factor(partner_id))
+  
 ```
 
 
@@ -90,7 +112,7 @@ Create competing models that predict whether a track belongs to:
 
 Option 1. you or your partner's collection
 
-```{r}
+```{r eval = FALSE}
 # clean the data 
 saved_artists <- saved_df[[2]]
 artist_df = data.frame()
@@ -111,10 +133,55 @@ saved_clean_luna <- saved_df %>%
   select() # select the columns we want!
 ```
 
+```{r}
+set.seed(279)
+# split the data
+feature_split <- initial_split(features_df)
+
+feature_train <- training(feature_split)
+feature_test <- testing(feature_split)
+
+# make recipe for variables 
+feature_recipe <- recipe(partner_id ~ ., data = feature_train) %>% 
+  # create dummy variables for all nominal predictors
+  step_dummy(all_nominal_predictors()) %>% # same as saying all_predictors() and -all_outcomes()
+  step_normalize(all_numeric_predictors())
+
+```
+
 
 You will eventually create four final candidate models:
 
 1.  k-nearest neighbor (Week 5)
+```{r}
+# set the neigbors to tuning so that it selects the best value of neighbors to increase accuracy
+feature_knn_tune <- nearest_neighbor(neighbors = tune()) %>% 
+  set_mode("classification") %>% 
+  set_engine("kknn")
+
+# create workflow
+workflow_tune <- workflow() %>% 
+  add_model(feature_knn_tune) %>% 
+  add_recipe(feature_recipe)
+
+# cross validation 
+set.seed(279)
+# 5-fold CV on the training dataset (instead of 10 for in-class demo)
+cv_folds <- feature_train %>% 
+  vfold_cv(v = 5)
+
+# resample and do cross validation 
+feature_res <- 
+  workflow_tune %>% 
+  tune_grid(
+    resamples = cv_folds, # defined above 
+    grid = 8
+    )
+
+
+```
+
+
 2.  decision tree (Week 5)
 3.  bagged tree (Week 6)
     -   bag_tree()
