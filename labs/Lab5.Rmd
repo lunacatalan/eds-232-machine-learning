@@ -178,7 +178,24 @@ feature_res <-
     grid = 8
     )
 
+#autoplot(feature_res)
 
+feature_final <- finalize_workflow(workflow_tune, # give workflow
+                               
+                               # select_best gives less information;
+                               select_best(feature_res, 
+                                           metric = "roc_auc")) # just the metric
+
+train_fit <- fit(feature_final, feature_train)
+
+feature_predict <- predict(train_fit, feature_test) %>% 
+  bind_cols(feature_test)
+
+accuracy(feature_predict, truth = partner_id,
+         estimate = .pred_class)
+
+sensitivity(feature_predict, truth = partner_id, estimate = .pred_class)
+specificity(feature_predict, truth = partner_id, estimate = .pred_class)
 ```
 
 
