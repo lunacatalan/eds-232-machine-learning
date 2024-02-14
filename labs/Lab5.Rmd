@@ -23,6 +23,11 @@ You have two options for completing this lab.
 library(spotifyr) #API interaction
 library(tidyverse)
 library(tidymodels)
+
+# for decision trees
+library(rpart)
+library(caret)
+library(rpart.plot)
 ```
 
 Client ID and Client Secret are required to create and access token that is required to interact with the API. You can set them as system values so we don't have to do provide them each time.
@@ -200,6 +205,65 @@ specificity(feature_predict, truth = partner_id, estimate = .pred_class)
 
 
 2.  decision tree (Week 5)
+```{r}
+feature_tree <- rpart(
+  formula = partner_id ~ ., 
+  data = feature_train,
+  method = "class",
+  control = list(cp = 0, xval = 10)
+)
+
+plot(feature_tree)
+plotcp(feature_tree)
+feature_tree$cptable
+
+rpart.plot(feature_tree)
+
+
+# select the CP that selects the minimum xerror
+bestcp <- feature_tree$cptable[which.min(feature_tree$cptable[,"xerror"]),"CP"]
+
+# prune the tree 
+feature_prune <- prune(feature_tree, cp = bestcp)
+
+prp(feature_prune, faclen = 0, cex = 0.8, extra = 1)
+
+predict(feature_prune, data = feature_test, type = "prob")
+
+feature_predict_dt <- predict(feature_prune, 
+                              feature_test, type = "class") %>% 
+  bind_cols(feature_test) %>% 
+  rename(.pred_class = ...1)
+
+accuracy(feature_predict_dt, truth = partner_id,
+         estimate = .pred_class)
+
+sensitivity(feature_predict, truth = partner_id, estimate = .pred_class)
+specificity(feature_predict, truth = partner_id, estimate = .pred_class)
+
+```
+
+
+```{r}
+# caret cross validation 
+feature_tree2 <- train(
+  partner_id ~ .,
+  data = feature_train,
+  method = "rpart",
+  trControl = trainControl(method = "cv", number = 10),
+  tuneLength = 20
+)
+
+ggplot(feature_tree2)
+
+# look at the importance of the features
+vip::vip(feature_tree2, # model 
+         num_features = 10, 
+         geom = "point")
+
+```
+
+
 3.  bagged tree (Week 6)
     -   bag_tree()
     -   Use the "times =" argument when setting the engine during model specification to specify the number of trees. The rule of thumb is that 50-500 trees is usually sufficient. The bottom of that range should be sufficient here.
