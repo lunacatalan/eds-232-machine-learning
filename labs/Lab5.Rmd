@@ -150,7 +150,7 @@ feature_test <- testing(feature_split)
 feature_recipe <- recipe(partner_id ~ ., data = feature_train) %>% 
   # create dummy variables for all nominal predictors
   step_dummy(all_nominal_predictors()) %>% # same as saying all_predictors() and -all_outcomes()
-  step_normalize(all_numeric_predictors())
+  step_normalize(all_numeric_predictors()) # for scaling purposes
 
 ```
 
@@ -205,6 +205,7 @@ specificity(feature_predict, truth = partner_id, estimate = .pred_class)
 
 
 2.  decision tree (Week 5)
+
 ```{r}
 feature_tree <- rpart(
   formula = partner_id ~ ., 
@@ -261,6 +262,67 @@ vip::vip(feature_tree2, # model
          num_features = 10, 
          geom = "point")
 
+```
+
+## decision tree from in class
+```{r}
+tree_spec_tune <- decision_tree(
+  cost_complexity = tune(),
+  tree_depth = tune(),
+  min_n = tune()
+) %>% 
+  set_engine("rpart") %>% 
+  set_mode("classification")
+
+# to tune; need grid of parameters that are going to be in the model 
+tree_grid <- grid_regular(cost_complexity(), tree_depth(), min_n(),
+                          levels = 5)
+
+# make workflow 
+wf_tree_tune <- workflow() %>% 
+  add_recipe(feature_recipe) %>% 
+  add_model(tree_spec_tune)
+
+
+#set up k-fold cv. This can be used for all the algorithms
+feature_cv <- feature_train %>% 
+  vfold_cv(v = 10) # 10 cross validation folds
+
+# so that this doesnt take long to run, do in sequence
+doParallel::registerDoParallel() #build trees in parallel
+
+system.time( # measure how long it takes to run
+  tree_rs <- tune_grid(
+    wf_tree_tune, # add workflow with model 
+    resamples = feature_cv,
+    grid = tree_grid,
+    metrics = metric_set(accuracy)
+  )
+)
+
+## Exploration 
+tree_rs
+
+# plot the accuracy
+tree_rs %>% autoplot() +
+  theme_bw()
+
+show_best(tree_rs, n = 3)
+
+# make a final workflow that selects the best values 
+final_tree <- finalize_workflow(wf_tree_tune, 
+                                select_best(tree_rs))
+
+final_tree
+
+final_tree_result <- last_fit(final_tree,
+                              feature_split) # use split
+
+## compare these to the way you did the tree above
+final_tree_result$.predictions
+
+# the testing accuracy and auc for the test data
+final_tree_result$.metrics
 ```
 
 
