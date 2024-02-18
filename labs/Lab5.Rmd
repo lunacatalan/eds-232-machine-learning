@@ -440,13 +440,15 @@ Compare the performance of the four final models you have created.
 train_fit_knn <- fit(feature_final, feature_train)
 
 feature_predict_knn <- predict(train_fit_knn, feature_test) %>% 
-  bind_cols(feature_test)
+  bind_cols(feature_test) %>% 
+  mutate(partner_id = as.factor(partner_id))
 
-accuracy(feature_predict_knn, truth = partner_id,
+feature_predict_knn_prob <- predict(train_fit_knn, feature_test, type = "prob") %>% 
+  bind_cols(feature_test) %>% 
+  mutate(partner_id = as.factor(partner_id))
+
+knn_accuracy = accuracy(feature_predict_knn, truth = partner_id,
          estimate = .pred_class)
-
-sensitivity(feature_predict_knn, truth = partner_id, estimate = .pred_class)
-specificity(feature_predict_knn, truth = partner_id, estimate = .pred_class)
 
 # decision tree model
 final_tree_result$.predictions
@@ -461,7 +463,12 @@ final_bag_tree_result$.metrics
 rf_predict <- predict(final_rf_result, feature_test) %>% 
   bind_cols(feature_test)
 
-accuracy(rf_predict, truth = partner_id, estimate = .pred_class) #get accuracy of testing prediction
+rf_accuracy <- accuracy(rf_predict, truth = partner_id, estimate = .pred_class) #get accuracy of testing prediction
+
+
+compare_models <- data.frame(model = c("knn", "decision_tree", "bag_tree", "random_forest"), 
+                             accuracy = c(knn_accuracy$.estimate, 0.7200000, 0.7600000, rf_accuracy$.estimate),
+                             roc_auc = c(NA, 0.7195513, 0.8259215, NA))
 
 ```
 Make a table with the accuracy for each model 
