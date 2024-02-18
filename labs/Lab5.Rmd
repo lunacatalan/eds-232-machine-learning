@@ -28,6 +28,9 @@ library(tidymodels)
 library(rpart)
 library(caret)
 library(rpart.plot)
+
+# for bag tree
+library(baguette)
 ```
 
 Client ID and Client Secret are required to create and access token that is required to interact with the API. You can set them as system values so we don't have to do provide them each time.
@@ -138,6 +141,12 @@ saved_clean_luna <- saved_df %>%
   select() # select the columns we want!
 ```
 
+# Go through the modeling process for each model:
+
+Preprocessing. You can use the same recipe for all the models you create.
+
+
+## Preprocessing 
 ```{r}
 set.seed(279)
 # split the data
@@ -154,6 +163,9 @@ feature_recipe <- recipe(partner_id ~ ., data = feature_train) %>%
 
 ```
 
+Resampling. Make sure to use appropriate resampling to select the best version created by each algorithm.
+
+Tuning. Find the best values for each hyperparameter (within a reasonable range).
 
 You will eventually create four final candidate models:
 
@@ -191,22 +203,16 @@ feature_final <- finalize_workflow(workflow_tune, # give workflow
                                select_best(feature_res, 
                                            metric = "roc_auc")) # just the metric
 
-train_fit <- fit(feature_final, feature_train)
+train_fit_knn <- fit(feature_final, feature_train)
 
-feature_predict <- predict(train_fit, feature_test) %>% 
+feature_predict_knn <- predict(train_fit_knn, feature_test) %>% 
   bind_cols(feature_test)
-
-accuracy(feature_predict, truth = partner_id,
-         estimate = .pred_class)
-
-sensitivity(feature_predict, truth = partner_id, estimate = .pred_class)
-specificity(feature_predict, truth = partner_id, estimate = .pred_class)
 ```
 
 
 2.  decision tree (Week 5)
 
-```{r}
+```{r eval = FALE}
 feature_tree <- rpart(
   formula = partner_id ~ ., 
   data = feature_train,
@@ -242,10 +248,6 @@ accuracy(feature_predict_dt, truth = partner_id,
 sensitivity(feature_predict, truth = partner_id, estimate = .pred_class)
 specificity(feature_predict, truth = partner_id, estimate = .pred_class)
 
-```
-
-
-```{r}
 # caret cross validation 
 feature_tree2 <- train(
   partner_id ~ .,
@@ -263,6 +265,7 @@ vip::vip(feature_tree2, # model
          geom = "point")
 
 ```
+
 
 ## decision tree from in class
 ```{r}
@@ -291,6 +294,7 @@ feature_cv <- feature_train %>%
 # so that this doesnt take long to run, do in sequence
 doParallel::registerDoParallel() #build trees in parallel
 
+# Resampling 
 system.time( # measure how long it takes to run
   tree_rs <- tune_grid(
     wf_tree_tune, # add workflow with model 
@@ -307,7 +311,7 @@ tree_rs
 tree_rs %>% autoplot() +
   theme_bw()
 
-show_best(tree_rs, n = 3)
+# show_best(tree_rs, n = 3)
 
 # make a final workflow that selects the best values 
 final_tree <- finalize_workflow(wf_tree_tune, 
@@ -329,18 +333,137 @@ final_tree_result$.metrics
 3.  bagged tree (Week 6)
     -   bag_tree()
     -   Use the "times =" argument when setting the engine during model specification to specify the number of trees. The rule of thumb is that 50-500 trees is usually sufficient. The bottom of that range should be sufficient here.
+
+```{r}
+# tune the model 
+bag_tree_spec_tune <- bag_tree(
+  cost_complexity = tune(),
+  tree_depth = tune(),
+  min_n = tune()
+) %>% 
+  set_engine("rpart",
+             times = 60) %>% 
+  set_mode("classification")
+
+# to tune; need grid of parameters that are going to be in the model 
+bag_tree_grid <- grid_regular(cost_complexity(), tree_depth(), min_n(),
+                          levels = 5)
+
+# make workflow 
+wf_bag_tree_tune <- workflow() %>% 
+  add_recipe(feature_recipe) %>% 
+  add_model(bag_tree_spec_tune)
+
+#set up k-fold cv. This can be used for all the algorithms
+feature_cv <- feature_train %>% 
+  vfold_cv(v = 10) # 10 cross validation folds
+
+# so that this doesnt take long to run, do in sequence
+doParallel::registerDoParallel() #build trees in parallel
+
+# Resampling 
+system.time( # measure how long it takes to run
+  bag_tree_rs <- tune_grid(
+    wf_bag_tree_tune, # add workflow with model 
+    resamples = feature_cv,
+    grid = bag_tree_grid,
+    metrics = metric_set(accuracy)
+  )
+)
+
+# plot the accuracy
+bag_tree_rs %>% autoplot() +
+  theme_bw()
+
+# make a final workflow that selects the best values 
+final_bag_tree <- finalize_workflow(wf_bag_tree_tune, 
+                                select_best(bag_tree_rs))
+
+# fit the model to test data
+final_bag_tree_result <- last_fit(final_bag_tree,
+                              feature_split) # use split
+
+## compare these to the way you did the tree above
+final_bag_tree_result$.predictions
+
+# the testing accuracy and auc for the test data
+final_bag_tree_result$.metrics
+
+```
+    
+
 4.  random forest (Week 6)
     -   rand_forest()
     -   m_try() is the new hyperparameter of interest for this type of model. Make sure to include it in your tuning process
 
-Go through the modeling process for each model:
+```{r}
+feature_rf <- rand_forest(mtry = tune(),
+                       trees = tune()) %>% 
+  set_engine("ranger") %>% 
+  set_mode("classification")
 
-Preprocessing. You can use the same recipe for all the models you create.
+# create workflow with feature recipe
+rf_workflow <- workflow() %>% 
+  add_model(feature_rf) %>% 
+  add_recipe(feature_recipe)
 
-Resampling. Make sure to use appropriate resampling to select the best version created by each algorithm.
 
-Tuning. Find the best values for each hyperparameter (within a reasonable range).
+# set cross validation and resampling  
+rf_cv_tune <- rf_workflow %>% 
+  tune_grid(resamples = cv_folds, # defined above using cv_folds = vfold_cv(train_data, v = 5) 
+            grid = 10) # 10 values for combinations of mtry and trees
+
+# Below are the results of the random forest cross validation tuning the mtry and trees parameters.
+collect_metrics(rf_cv_tune)
+
+autoplot(rf_cv_tune) + #plot cv results for parameter tuning
+  theme_bw()
+
+# make a final workflow that selects the best values 
+final_rf <- finalize_workflow(rf_workflow, # add workflow
+                                select_best(rf_cv_tune)) # select the best metrics
+
+# fit the model to test data
+final_rf_result <- fit(final_rf, feature_train) # use training to fit model
+
+rf_predict <- predict(final_rf_result, feature_test) %>% 
+  bind_cols(feature_test)
+
+accuracy(rf_predict, truth = partner_id, estimate = .pred_class) #get accuracy of testing prediction
+```
+
 
 Compare the performance of the four final models you have created.
+
+```{r}
+# knn model 
+train_fit_knn <- fit(feature_final, feature_train)
+
+feature_predict_knn <- predict(train_fit_knn, feature_test) %>% 
+  bind_cols(feature_test)
+
+accuracy(feature_predict_knn, truth = partner_id,
+         estimate = .pred_class)
+
+sensitivity(feature_predict_knn, truth = partner_id, estimate = .pred_class)
+specificity(feature_predict_knn, truth = partner_id, estimate = .pred_class)
+
+# decision tree model
+final_tree_result$.predictions
+final_tree_result$.metrics
+
+# bagged trees model
+final_bag_tree_result
+final_bag_tree_result$.predictions
+final_bag_tree_result$.metrics
+
+# random forest model 
+rf_predict <- predict(final_rf_result, feature_test) %>% 
+  bind_cols(feature_test)
+
+accuracy(rf_predict, truth = partner_id, estimate = .pred_class) #get accuracy of testing prediction
+
+```
+Make a table with the accuracy for each model 
 
 Use appropriate performance evaluation metric(s) for this classification task. A table would be a good way to display your comparison. Use at least one visualization illustrating your model results.
