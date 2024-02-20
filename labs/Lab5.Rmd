@@ -45,7 +45,7 @@ authorization_code <- get_spotify_authorization_code(scope = scopes()[c(1:19)]) 
 access_token <- get_spotify_access_token() #takes ID and SECRET, sends to Spotify and receives an access token
 ```
 
-**Option 1: Data Preparation**
+## **Option 1: Data Preparation**
 
 You can use get_my_saved_tracks() to request all your liked tracks. It would be good if you had at least 150-200 liked tracks so the model has enough data to work with. If you don't have enough liked tracks, you can instead use get_my_recently_played(), and in that case grab at least 500 recently played tracks if you can.
 
@@ -90,37 +90,80 @@ saved_tracks <- function(AC) {
 
 saved_df <- saved_tracks(authorization_code)
 
-# track_df <- saved_df %>% 
-#   select(track.name, track_id = track.id)
 ```
 
+### Combine Data
 
 ```{r}
 sam_df <- read_csv(here::here("labs", "data", "sam_audio.csv")) %>% 
   select(-track.name) %>% 
   mutate(partner_id = "Sam")
   
-luna_audio <- get_track_audio_features(saved_df$track.id[101:200])
+artists <- saved_df %>% 
+  select(track.name, track_id = track.id) %>% 
+  slice_head(n = 200)
 
 luna_df <- get_track_audio_features(saved_df$track.id[1:100]) %>% 
-  rbind(luna_audio) %>% 
-  mutate(partner_id = "Luna")
+  rbind(get_track_audio_features(saved_df$track.id[101:200])) %>% 
+  mutate(partner_id = "Luna") 
+
+luna_artists <- luna_df %>% 
+  cbind(artists)
 
 features_df <- rbind(luna_df, sam_df) %>% 
   mutate_if(is.ordered, .funs = factor, ordered = F) %>% 
-  select(-type, -id, -uri, -track_href, -analysis_url) %>% 
+  select(-type, -id, -uri, -track_href, -analysis_url, -time_signature) %>% 
   mutate(partner_id = as.factor(partner_id))
   
 ```
 
+### Visualizations
+```{r}
 
-### **Modeling**
+ggplot() +
+  geom_point(data = features_df,
+             aes(x = danceability, y = energy, 
+                 color = partner_id)) +
+  theme_bw()
+
+ggplot() +
+  geom_point(data = features_df,
+             aes(x = danceability, y = acousticness, 
+                 color = partner_id)) +
+  theme_bw()
+
+slice <- luna_artists %>% 
+  slice_max(order_by = loudness, 
+             n = 10)
+
+ggplot(data = luna_artists) +
+  geom_point(aes(x = danceability, y = energy, 
+                 size = loudness, alpha = 0.5,
+                 color = "red")) +
+  geom_text(data = slice,
+    aes(x = danceability, y = energy,
+        label = track.name),
+    size = 3,
+    min.segment.length = 0, 
+    seed = 10, 
+    box.padding = 0.5,
+    max.overlaps = Inf,
+    arrow = arrow(length = unit(0.010, "npc")),
+    #nudge_x = .15,
+    #nudge_y = .5,
+    color = "black") +
+  theme_bw()
+
+```
+
+
+# **Modeling**
 
 Create competing models that predict whether a track belongs to:
 
-Option 1. you or your partner's collection
+Option 1. you or your partner's collection:
 
-```{r eval = FALSE}
+```{r eval = FALSE, include = FALSE}
 # clean the data 
 saved_artists <- saved_df[[2]]
 artist_df = data.frame()
@@ -141,13 +184,12 @@ saved_clean_luna <- saved_df %>%
   select() # select the columns we want!
 ```
 
-# Go through the modeling process for each model:
+Go through the modeling process for each model.
 
-Preprocessing. You can use the same recipe for all the models you create.
+## Preprocessing\
+You can use the same recipe for all the models you create.
 
-
-## Preprocessing 
-```{r}
+```{r, message = FALSE}
 set.seed(279)
 # split the data
 feature_split <- initial_split(features_df)
@@ -167,9 +209,8 @@ Resampling. Make sure to use appropriate resampling to select the best version c
 
 Tuning. Find the best values for each hyperparameter (within a reasonable range).
 
-You will eventually create four final candidate models:
 
-1.  k-nearest neighbor (Week 5)
+### 1.  k-nearest neighbor (Week 5)
 ```{r}
 # set the neigbors to tuning so that it selects the best value of neighbors to increase accuracy
 feature_knn_tune <- nearest_neighbor(neighbors = tune()) %>% 
@@ -210,9 +251,9 @@ feature_predict_knn <- predict(train_fit_knn, feature_test) %>%
 ```
 
 
-2.  decision tree (Week 5)
+### 2.  Decision tree (Week 5)
 
-```{r eval = FALE}
+```{r eval = FALE, include = FALSE}
 feature_tree <- rpart(
   formula = partner_id ~ ., 
   data = feature_train,
@@ -266,8 +307,6 @@ vip::vip(feature_tree2, # model
 
 ```
 
-
-## decision tree from in class
 ```{r}
 tree_spec_tune <- decision_tree(
   cost_complexity = tune(),
@@ -330,7 +369,7 @@ final_tree_result$.metrics
 ```
 
 
-3.  bagged tree (Week 6)
+### 3.  bagged tree (Week 6)
     -   bag_tree()
     -   Use the "times =" argument when setting the engine during model specification to specify the number of trees. The rule of thumb is that 50-500 trees is usually sufficient. The bottom of that range should be sufficient here.
 
@@ -392,7 +431,7 @@ final_bag_tree_result$.metrics
 ```
     
 
-4.  random forest (Week 6)
+### 4.  random forest (Week 6)
     -   rand_forest()
     -   m_try() is the new hyperparameter of interest for this type of model. Make sure to include it in your tuning process
 
@@ -433,7 +472,7 @@ accuracy(rf_predict, truth = partner_id, estimate = .pred_class) #get accuracy o
 ```
 
 
-Compare the performance of the four final models you have created.
+## Compare the performance of the four final models you have created.
 
 ```{r}
 # knn model 
@@ -465,12 +504,13 @@ rf_predict <- predict(final_rf_result, feature_test) %>%
 
 rf_accuracy <- accuracy(rf_predict, truth = partner_id, estimate = .pred_class) #get accuracy of testing prediction
 
+```
+### Make a table with the accuracy for each model 
+```{r}
 
 compare_models <- data.frame(model = c("knn", "decision_tree", "bag_tree", "random_forest"), 
                              accuracy = c(knn_accuracy$.estimate, 0.7200000, 0.7600000, rf_accuracy$.estimate),
                              roc_auc = c(NA, 0.7195513, 0.8259215, NA))
-
 ```
-Make a table with the accuracy for each model 
 
 Use appropriate performance evaluation metric(s) for this classification task. A table would be a good way to display your comparison. Use at least one visualization illustrating your model results.
