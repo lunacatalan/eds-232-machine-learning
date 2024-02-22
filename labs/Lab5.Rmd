@@ -17,8 +17,6 @@ You have two options for completing this lab.
 
 **Option 1**: **Classify by users**. Build models that predict whether a given song will be in your collection vs. a partner in class. This requires that you were already a Spotify user so you have enough data to work with. You will download your data from the Spotify API and then exchange with another member of class.
 
-**Option 2**: **Classify by genres**. Build models that predict which genre a song belongs to. This will use a pre-existing Spotify dataset available from Kaggle.com (<https://www.kaggle.com/datasets/mrmorj/dataset-of-songs-in-spotify>)
-
 ```{r message=FALSE}
 library(spotifyr) #API interaction
 library(tidyverse)
@@ -212,7 +210,8 @@ Tuning. Find the best values for each hyperparameter (within a reasonable range)
 
 ### 1.  k-nearest neighbor (Week 5)
 ```{r}
-# set the neigbors to tuning so that it selects the best value of neighbors to increase accuracy
+set.seed(279)
+# set the neighbors to tuning so that it selects the best value of neighbors to increase accuracy
 feature_knn_tune <- nearest_neighbor(neighbors = tune()) %>% 
   set_mode("classification") %>% 
   set_engine("kknn")
@@ -228,7 +227,7 @@ set.seed(279)
 cv_folds <- feature_train %>% 
   vfold_cv(v = 5)
 
-# resample and do cross validation 
+# Resampling and do cross validation 
 feature_res <- 
   workflow_tune %>% 
   tune_grid(
@@ -241,13 +240,24 @@ feature_res <-
 feature_final <- finalize_workflow(workflow_tune, # give workflow
                                
                                # select_best gives less information;
-                               select_best(feature_res, 
-                                           metric = "roc_auc")) # just the metric
+                               select_best(feature_res)) 
+                                           #metric = "roc_auc")) # just the metric
 
+
+# fit the model to the training data
 train_fit_knn <- fit(feature_final, feature_train)
+train_knn <- last_fit(feature_final, feature_split) # use the split
 
 feature_predict_knn <- predict(train_fit_knn, feature_test) %>% 
-  bind_cols(feature_test)
+  bind_cols(feature_test) %>% 
+  mutate(partner_id = as.factor(partner_id))
+
+feature_predict_knn_prob <- predict(train_fit_knn, feature_test, type = "prob") %>% 
+  bind_cols(feature_test) %>% 
+  mutate(partner_id = as.factor(partner_id))
+
+knn_accuracy = accuracy(feature_predict_knn, truth = partner_id,
+         estimate = .pred_class)
 ```
 
 
@@ -308,6 +318,7 @@ vip::vip(feature_tree2, # model
 ```
 
 ```{r}
+set.seed(279)
 tree_spec_tune <- decision_tree(
   cost_complexity = tune(),
   tree_depth = tune(),
@@ -339,16 +350,9 @@ system.time( # measure how long it takes to run
     wf_tree_tune, # add workflow with model 
     resamples = feature_cv,
     grid = tree_grid,
-    metrics = metric_set(accuracy)
+    metrics = metric_set(accuracy) # look at accuracy
   )
 )
-
-## Exploration 
-tree_rs
-
-# plot the accuracy
-tree_rs %>% autoplot() +
-  theme_bw()
 
 # show_best(tree_rs, n = 3)
 
@@ -356,10 +360,21 @@ tree_rs %>% autoplot() +
 final_tree <- finalize_workflow(wf_tree_tune, 
                                 select_best(tree_rs))
 
-final_tree
-
 final_tree_result <- last_fit(final_tree,
                               feature_split) # use split
+
+```
+
+
+```{r eval = FALSE, include = TRUE}
+## Exploration 
+#tree_rs
+
+# plot the accuracy
+tree_rs %>% autoplot() +
+  theme_bw()
+
+final_tree
 
 ## compare these to the way you did the tree above
 final_tree_result$.predictions
@@ -374,6 +389,7 @@ final_tree_result$.metrics
     -   Use the "times =" argument when setting the engine during model specification to specify the number of trees. The rule of thumb is that 50-500 trees is usually sufficient. The bottom of that range should be sufficient here.
 
 ```{r}
+set.seed(279)
 # tune the model 
 bag_tree_spec_tune <- bag_tree(
   cost_complexity = tune(),
@@ -410,10 +426,6 @@ system.time( # measure how long it takes to run
   )
 )
 
-# plot the accuracy
-bag_tree_rs %>% autoplot() +
-  theme_bw()
-
 # make a final workflow that selects the best values 
 final_bag_tree <- finalize_workflow(wf_bag_tree_tune, 
                                 select_best(bag_tree_rs))
@@ -422,12 +434,17 @@ final_bag_tree <- finalize_workflow(wf_bag_tree_tune,
 final_bag_tree_result <- last_fit(final_bag_tree,
                               feature_split) # use split
 
+```
+```{r eval = FALSE, include = TRUE}
+# plot the accuracy
+bag_tree_rs %>% autoplot() +
+  theme_bw()
+
 ## compare these to the way you did the tree above
 final_bag_tree_result$.predictions
 
 # the testing accuracy and auc for the test data
 final_bag_tree_result$.metrics
-
 ```
     
 
@@ -436,6 +453,7 @@ final_bag_tree_result$.metrics
     -   m_try() is the new hyperparameter of interest for this type of model. Make sure to include it in your tuning process
 
 ```{r}
+set.seed(279)
 feature_rf <- rand_forest(mtry = tune(),
                        trees = tune()) %>% 
   set_engine("ranger") %>% 
@@ -450,13 +468,8 @@ rf_workflow <- workflow() %>%
 # set cross validation and resampling  
 rf_cv_tune <- rf_workflow %>% 
   tune_grid(resamples = cv_folds, # defined above using cv_folds = vfold_cv(train_data, v = 5) 
+            metrics = metric_set(roc_auc),
             grid = 10) # 10 values for combinations of mtry and trees
-
-# Below are the results of the random forest cross validation tuning the mtry and trees parameters.
-collect_metrics(rf_cv_tune)
-
-autoplot(rf_cv_tune) + #plot cv results for parameter tuning
-  theme_bw()
 
 # make a final workflow that selects the best values 
 final_rf <- finalize_workflow(rf_workflow, # add workflow
@@ -464,9 +477,21 @@ final_rf <- finalize_workflow(rf_workflow, # add workflow
 
 # fit the model to test data
 final_rf_result <- fit(final_rf, feature_train) # use training to fit model
+rf_metrics <- last_fit(final_rf, feature_split) # use split
 
 rf_predict <- predict(final_rf_result, feature_test) %>% 
   bind_cols(feature_test)
+
+```
+
+```{r eval = FALSE, include=TRUE}
+# Below are the results of the random forest cross validation tuning the mtry and trees parameters.
+collect_metrics(rf_cv_tune)
+
+autoplot(rf_cv_tune) + #plot cv results for parameter tuning
+  theme_bw()
+
+final_rf_result
 
 accuracy(rf_predict, truth = partner_id, estimate = .pred_class) #get accuracy of testing prediction
 ```
@@ -475,42 +500,47 @@ accuracy(rf_predict, truth = partner_id, estimate = .pred_class) #get accuracy o
 ## Compare the performance of the four final models you have created.
 
 ```{r}
-# knn model 
-train_fit_knn <- fit(feature_final, feature_train)
+set.seed(279)
 
-feature_predict_knn <- predict(train_fit_knn, feature_test) %>% 
-  bind_cols(feature_test) %>% 
-  mutate(partner_id = as.factor(partner_id))
-
-feature_predict_knn_prob <- predict(train_fit_knn, feature_test, type = "prob") %>% 
-  bind_cols(feature_test) %>% 
-  mutate(partner_id = as.factor(partner_id))
-
-knn_accuracy = accuracy(feature_predict_knn, truth = partner_id,
-         estimate = .pred_class)
+#knn model
+knn_metrics <- as.data.frame(train_knn$.metrics) %>% 
+  select(.metric, .estimate) %>% 
+  pivot_wider(names_from = .metric, 
+              values_from = .estimate) %>% 
+  mutate(model = "knn")
 
 # decision tree model
-final_tree_result$.predictions
-final_tree_result$.metrics
+#final_tree_result$.predictions
+dt_metrics <- as.data.frame(final_tree_result$.metrics) %>% 
+  select(.metric, .estimate) %>%
+  pivot_wider(names_from = .metric, 
+              values_from = .estimate) %>% 
+  mutate(model = "decision tree")
 
 # bagged trees model
-final_bag_tree_result
-final_bag_tree_result$.predictions
-final_bag_tree_result$.metrics
+#final_bag_tree_result
+#final_bag_tree_result$.predictions
+bag_metrics <- as.data.frame(final_bag_tree_result$.metrics) %>% 
+  select(.metric, .estimate) %>%
+  pivot_wider(names_from = .metric, 
+              values_from = .estimate) %>% 
+  mutate(model = "Bag Tree")
 
 # random forest model 
-rf_predict <- predict(final_rf_result, feature_test) %>% 
-  bind_cols(feature_test)
+rf_metrics_df <- as.data.frame(rf_metrics$.metrics) %>% 
+  select(.metric, .estimate) %>%
+  pivot_wider(names_from = .metric, 
+              values_from = .estimate) %>% 
+  mutate(model = "Random Forest")
 
-rf_accuracy <- accuracy(rf_predict, truth = partner_id, estimate = .pred_class) #get accuracy of testing prediction
 
 ```
+
 ### Make a table with the accuracy for each model 
 ```{r}
+compare_models <- rbind(knn_metrics, dt_metrics, bag_metrics, rf_metrics_df)
 
-compare_models <- data.frame(model = c("knn", "decision_tree", "bag_tree", "random_forest"), 
-                             accuracy = c(knn_accuracy$.estimate, 0.7200000, 0.7600000, rf_accuracy$.estimate),
-                             roc_auc = c(NA, 0.7195513, 0.8259215, NA))
+sjPlot::tab_df(compare_models)
 ```
 
 Use appropriate performance evaluation metric(s) for this classification task. A table would be a good way to display your comparison. Use at least one visualization illustrating your model results.
