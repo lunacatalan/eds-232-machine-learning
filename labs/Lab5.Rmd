@@ -252,6 +252,7 @@ feature_predict_knn <- predict(train_fit_knn, feature_test) %>%
   bind_cols(feature_test) %>% 
   mutate(partner_id = as.factor(partner_id))
 
+# with probabilities -- use the one above
 feature_predict_knn_prob <- predict(train_fit_knn, feature_test, type = "prob") %>% 
   bind_cols(feature_test) %>% 
   mutate(partner_id = as.factor(partner_id))
@@ -263,7 +264,7 @@ knn_accuracy = accuracy(feature_predict_knn, truth = partner_id,
 
 ### 2.  Decision tree (Week 5)
 
-```{r eval = FALE, include = FALSE}
+```{r eval = FALSE, include = FALSE}
 feature_tree <- rpart(
   formula = partner_id ~ ., 
   data = feature_train,
@@ -537,10 +538,21 @@ rf_metrics_df <- as.data.frame(rf_metrics$.metrics) %>%
 ```
 
 ### Make a table with the accuracy for each model 
+
+Use appropriate performance evaluation metric(s) for this classification task. A table would be a good way to display your comparison. Use at least one visualization illustrating your model results.
 ```{r}
 compare_models <- rbind(knn_metrics, dt_metrics, bag_metrics, rf_metrics_df)
 
 sjPlot::tab_df(compare_models)
 ```
 
-Use appropriate performance evaluation metric(s) for this classification task. A table would be a good way to display your comparison. Use at least one visualization illustrating your model results.
+Looking at the confusion matrix for the best performing model: Random Forest:
+```{r}
+
+rf_cf <- confusionMatrix(data=rf_predict$.pred_class, reference = rf_predict$partner_id)
+rf_cf
+
+table(data=rf_predict$.pred_class, reference = rf_predict$partner_id)
+
+```
+
