@@ -1,0 +1,194 @@
+---
+title: "Clustering Lab"
+author: "Mateo Robbins"
+date: "2024-02-29"
+output: html_document
+---
+
+```{r, echo = FALSE, eval = TRUE}
+library(tidyverse) 
+library(cluster) #cluster analysis
+library(factoextra) #cluster visualization
+library(tidymodels) #simulation 
+library(readr) #read data
+library(RColorBrewer)# Color palettes
+
+```
+
+We'll start off with some simulated data that has a structure that is amenable to clustering analysis.
+
+```{r init_sim}
+#Set the parameters of our simulated data
+set.seed(101)
+
+# define centers
+cents <- tibble(
+  # make number of clusters
+  clusters = factor(1:3), # make 3 clusters
+  num_points = c(100, 150, 50), # difference sizes for each cluster
+  # location is  (x1, x2)
+  x1 = c(5, 0, -3), # x coords of the centers of the clusters
+  x2 = c(-1, 1, -2) # x2 coords
+)
+```
+
+
+```{r sim}
+#Simulate the data by passing n and mean to rnorm using map2()
+labelled_pt <- 
+  cents %>% # set parameters
+  mutate(
+    x1 = map2(num_points, x1, rnorm),
+    x2 = map2(num_points, x2, rnorm)
+  ) %>% 
+  select(-num_points) %>% 
+  unnest(cols = c(x1, x2)) # expand the values to rows
+
+# map the clusters
+ggplot(labelled_pt, aes(x1, x2, color = clusters)) +
+  geom_point(alpha = 0.4)
+```
+
+
+```{r kmeans}
+points <- 
+  labelled_pt %>% 
+  select(-clusters) # this is the answer
+
+kclust <- kmeans(
+  
+  points, 
+  centers = 3, # k parameter --> how many groups we want to look 
+  n = 25
+)
+kclust
+```
+
+```{r syst_k}
+#now let's try a systematic method for setting k
+kclusts <- 
+  tibble(k = 1:9) %>% # when k is 1 through 9
+  mutate(
+    # only taking 1 object so use map()
+    kclust = map(k, # for each value of k do the following
+                  ~kmeans(points, .x)), # .x is where the value of k 
+    augmented = map(kclust, augment, points)
+  )
+```
+
+```{r assign}
+#append cluster assignment to tibble
+assignments <- 
+  kclusts %>% 
+  unnest(cols = c(augmented))
+```
+
+```{r plot_9_clust}
+#Plot each model 
+p1 <-
+  ggplot(assignments, aes(x = x1, y = x2)) +
+  geom_point(aes(color = .cluster), alpha = 0.8) +
+  scale_color_brewer(palette = "Set1") + 
+  facet_wrap(~.cluster)
+
+p1
+```
+
+```{r elbow}
+#Use a clustering function from {factoextra} to plot  total WSSs
+fviz_nbclust(points, kmeans, "wss")
+ 
+```
+
+
+```{r more_fviz}
+#Another plotting method
+k3 <- kmeans(points, centers = 3, nstart = 25)
+
+p3 <- fviz_cluster(k3, geom = "point", 
+                   data = points) +
+  ggtitle("k = 3")
+
+p3
+```
+
+
+In-class assignment!
+
+Now it's your turn to partition a dataset.  For this round we'll use data from Roberts et al. 2008 on bio-contaminants in Sydney Australia's Port Jackson Bay.  The data are measurements of metal content in two types of co-occurring algae at 10 sample sites around the bay.
+
+```{r data}
+#Read in data
+metals_dat <- readr::read_csv(here::here("labs/data/Harbour_metals.csv"))
+
+# Inspect the data
+head(metals_dat)
+
+#Grab pollutant variables
+metals_dat2 <- metals_dat[, 4:8] 
+```
+
+1. Start with k-means clustering - kmeans().  You can start with fviz_nbclust() to identify the best value of k. Then plot the model you obtain with the optimal value of k. 
+
+```{r}
+fviz_nbclust(metals_dat2, kmeans, "wss")
+```
+
+
+```{r}
+k3 <- kmeans(metals_dat2, centers = 3, # defined from above
+             nstart = 1)
+
+k2 <- kmeans(metals_dat2, centers = 2, # defined from above
+             nstart = 1)
+
+fviz_cluster(k3, geom = "point", 
+                   data = metals_dat2) +
+  ggtitle("k = 3")
+
+fviz_cluster(k2, geom = "point", 
+                   data = metals_dat2) +
+  ggtitle("k = 2")
+```
+
+
+Do you notice anything different about the spacing between clusters?  Why might this be?
+
+The clusters are closer together, and the blue and green ven overlap. 
+
+Run summary() on your model object.  Does anything stand out?
+```{r}
+summary(k3)
+```
+
+
+2. Good, now let's move to hierarchical clustering that we saw in lecture. The first step for that is to calculate a distance matrix on the data (using dist()). Euclidean is a good choice for the distance method.
+```{r}
+
+metal_clust <- dist(metals_dat2,
+                    method = "euclidean")
+
+```
+
+
+2. Use tidy() on the distance matrix so you can see what is going on. What does each row in the resulting table represent?
+```{r}
+metal_clust_tidy <- tidy(metal_clust)
+```
+
+
+3. Then apply hierarchical clustering with hclust().
+```{r}
+clust <- hclust(metal_clust)
+```
+
+
+4. Now plot the clustering object. You can use something of the form plot(as.dendrogram()).  Or you can check out the cool visual options here: https://rpubs.com/gaston/dendrograms
+```{r}
+plot(as.dendrogram(clust))
+```
+
+
+How does the plot look? Do you see any outliers?  How can you tell?  
+
+
