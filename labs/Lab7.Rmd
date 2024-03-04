@@ -1,11 +1,11 @@
 ---
 title: "Clustering Lab"
-author: "Mateo Robbins"
+author: "Luna Herschenfeld-Catalan"
 date: "2024-02-29"
 output: html_document
 ---
 
-```{r, echo = FALSE, eval = TRUE}
+```{r, echo = FALSE, eval = TRUE, message=FALSE}
 library(tidyverse) 
 library(cluster) #cluster analysis
 library(factoextra) #cluster visualization
@@ -13,6 +13,7 @@ library(tidymodels) #simulation
 library(readr) #read data
 library(RColorBrewer)# Color palettes
 
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
 ```
 
 We'll start off with some simulated data that has a structure that is amenable to clustering analysis.
@@ -122,7 +123,7 @@ Now it's your turn to partition a dataset.  For this round we'll use data from R
 metals_dat <- readr::read_csv(here::here("labs/data/Harbour_metals.csv"))
 
 # Inspect the data
-head(metals_dat)
+#head(metals_dat)
 
 #Grab pollutant variables
 metals_dat2 <- metals_dat[, 4:8] 
@@ -134,6 +135,7 @@ metals_dat2 <- metals_dat[, 4:8]
 fviz_nbclust(metals_dat2, kmeans, "wss")
 ```
 
+From the kmeans clustering, it looks like either 2 or 3 could be the best k-mean. 
 
 ```{r}
 k3 <- kmeans(metals_dat2, centers = 3, # defined from above
@@ -154,12 +156,13 @@ fviz_cluster(k2, geom = "point",
 
 Do you notice anything different about the spacing between clusters?  Why might this be?
 
-The clusters are closer together, and the blue and green ven overlap. 
+The clusters are closer together, and the blue and green overlap. This might be because there are a couple of the points that could be assigned to either the blue or the green cluster depending on the randomized center assigned. The points may be within d-distance away from the centers, and cause overlap. 
 
 Run summary() on your model object.  Does anything stand out?
 ```{r}
 summary(k3)
 ```
+I notice that there are 60 clusters, even though I specified 3 clusters. This is the number of observations in `metals_dat2`, which suggests that its going from the bottom up, and first assigning each point its own cluster and then making clusters sequentially from the closest points. 
 
 
 2. Good, now let's move to hierarchical clustering that we saw in lecture. The first step for that is to calculate a distance matrix on the data (using dist()). Euclidean is a good choice for the distance method.
@@ -189,6 +192,6 @@ plot(as.dendrogram(clust))
 ```
 
 
-How does the plot look? Do you see any outliers?  How can you tell?  
+How does the plot look? Do you see any outliers?  How can you tell? \
 
-
+The plot looks like a tree! The cluster all the way to the left looks like an outlier since there are really tall branches between those and the rest of the data. You can tell there are outliers because the branches are really tall that connect it to the data, which means we are merging points that are very far away from each other. 
