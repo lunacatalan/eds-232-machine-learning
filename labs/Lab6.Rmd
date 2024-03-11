@@ -321,7 +321,7 @@ This model has an 82.8% accuracy rate on the evaluation data.
 
 3.  How do your results compare to those of Elith et al.?
 
-The results of the Elith et al. indicated that the roc_auc (Area under the receiver operating characteristic curve) was 0.858. 
+The results of the Elith et al. indicated that the roc_auc (Area under the receiver operating characteristic curve) was 0.858. We got similar results. 
 
 -   Use {vip} to compare variable importance
 

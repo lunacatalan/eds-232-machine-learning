@@ -1,0 +1,152 @@
+---
+title: "Lab 8"
+author: "Luna Herschenfeld-Catalán"
+date: "2024-03-06"
+output: html_document
+---
+
+## Forest Cover Classification with SVM
+
+In this week's lab we are exploring the use of Support Vector Machines for multi-class classification. Specifically, you will be using cartographic variables to predict forest cover type (7 types).
+
+Natural resource managers responsible for developing ecosystem management strategies require basic descriptive information including inventory data like forest cover type for forested lands to support their decision-making processes. However, managers generally do not have this type of data for in-holdings or neighboring lands that are outside their immediate jurisdiction. One method of obtaining this information is through the use of predictive models.
+
+You task is build both an SVM and a random forest model and compare their performance on accuracy and computation time.
+
+1.  The data is available here: <https://ucsb.box.com/s/ai5ost029enlguqyyn04bnlfaqmp8kn4>
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(tidymodels)
+library(tidyverse)
+library(dplyr)
+library(kernlab)
+library(tidyclust)
+
+set.seed(47)
+```
+
+
+Explore the data.
+
+```{r}
+covtype <- read_csv(here::here("labs", "data", "covtype_sample.csv")) %>% 
+  janitor::clean_names() %>% 
+  mutate(cover_type = as.factor(cover_type)) %>% 
+  select_if(function(col) length(unique(col))>1) %>%  # remove columns with only 0 in them
+  mutate(across(11:53, as.factor)) # convert binary to initial
+
+```
+
+-   What kinds of features are we working with?
+
+**Some of the features are continuous and some are categorical.**
+
+-   Does anything stand out that will affect you modeling choices?
+
+Hint: Pay special attention to the distribution of the outcome variable across the classes.
+
+**Since there are both categorical and continuous variables, in our recipe we need to think critically about whether we are using a linear engine or a classification engine in the workflow. The `soil_type` variables are all categorical though, and it is coding for presence. When we plot the distribution of the `cover_type` which is the outcome variable, we also see that there is a large bias in the dataset. Most of the points are the `cover_type` 1 and 2, and `cover_type` 4 is very underrepresented.**
+
+```{r}
+ggplot(covtype) +
+  geom_histogram(aes(x = cover_type), stat="count") +
+  labs(title = "Distribution of Cover Types in Dataset") +
+  theme_minimal() 
+```
+
+
+2.  Create the recipe and carry out any necessary preprocessing. Can you use the same recipe for both models?
+
+**We can use the same recipe for both models because we are treating the data based on the attributes**
+
+```{r}
+# split the data 
+cov_split <- initial_split(covtype)
+cov_train <- training(cov_split)
+cov_test <- testing(cov_split)
+
+# split the data to only keep 10% because svm thinks its redundant
+cov_split_svm <- initial_split(cov_train, 
+                               strata = cover_type,
+                               prop = 0.1)
+cov_train_svm <- training(cov_split_svm)
+
+# create recipe with training data 
+cov_recipe <- recipe(cover_type ~ ., data = cov_train) %>% 
+  step_dummy(all_nominal_predictors(), # categorical predictors
+             one_hot = TRUE) %>% 
+  step_normalize(all_numeric_predictors()) # all the numeric variables
+
+```
+
+
+3.  Create the folds for cross-validation.
+```{r}
+# create the folds 
+vfolds <- vfold_cv(cov_train, strata = cover_type)
+```
+
+
+4.  Tune the models. Choose appropriate parameters and grids. If the computational costs of tuning given your strategy are prohibitive, how might you work around this?
+
+# SVM
+```{r eval = FALSE}
+cov_recipe_svm <- recipe(cover_type ~ ., data = cov_train_svm) %>% 
+  step_dummy(all_nominal_predictors(), # categorical predictors
+             one_hot = TRUE) %>% 
+  step_normalize(all_numeric_predictors())  
+
+# create clustering 
+svm_spec <- svm_poly(degree = 1, cost = tune()) %>% 
+  set_mode("classification") %>% 
+  set_engine("kernlab")
+
+# create workflow
+svm_wf <- workflow() %>% 
+  add_model(svm_spec %>% 
+              set_args(cost = tune())) %>% 
+  add_recipe(cov_recipe_svm)
+  
+
+# create grid
+param_grid <- grid_regular(cost(), 
+                           levels = 10) # number of different values for cost() that we want to try
+
+# tune the cluster
+# recipe with the step_normalize() did not work so I removed it
+tune_res <- tune_grid(
+  svm_wf, # add workflow
+  resamples = vfolds, # add folds
+  grid = param_grid # add grid
+)
+
+autoplot(tune_res)
+```
+
+
+# Random Forest
+```{r eval = FALSE}
+rf_spec <- rand_forest(mtry = tune(), 
+                        trees = tune()) %>%
+  set_engine("ranger") %>% 
+  set_mode("classification") # the output is cover type
+
+# create workflow with feature recipe
+rf_workflow <- workflow() %>% 
+  add_model(rf_spec) %>% 
+  add_recipe(cov_recipe)
+
+# this is taking a r
+rf_tune <- rf_workflow %>% 
+  tune_grid(
+    resamples = vfolds, # add folds
+    grid = 10 # number of combos of mtry and trees
+  )
+
+```
+
+
+5.  Conduct final predictions for both models and compare their prediction performances and computation costs from part 4.
+
+-   Which type of model do you think is better for this task?
+-   Why do you speculate this is the case?
