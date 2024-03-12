@@ -32,8 +32,10 @@ Explore the data.
 covtype <- read_csv(here::here("labs", "data", "covtype_sample.csv")) %>% 
   janitor::clean_names() %>% 
   mutate(cover_type = as.factor(cover_type)) %>% 
-  select_if(function(col) length(unique(col))>1) %>%  # remove columns with only 0 in them
-  mutate(across(11:53, as.factor)) # convert binary to initial
+  mutate(cover_type = as.factor(cover_type)) %>%  
+  mutate(across(6:54, as.factor)) %>%   # convert binary to initial
+  select(-soil_type_15, -soil_type_37, -soil_type_38, -soil_type_39, -soil_type_40)
+  #select_if(function(col) length(unique(col))>1) %>%  # remove columns with only 0 in them
 
 ```
 
@@ -70,13 +72,23 @@ cov_split_svm <- initial_split(cov_train,
                                strata = cover_type,
                                prop = 0.1)
 cov_train_svm <- training(cov_split_svm)
+cov_test_svm <- testing(cov_split_svm)
 
 # create recipe with training data 
 cov_recipe <- recipe(cover_type ~ ., data = cov_train) %>% 
   step_dummy(all_nominal_predictors(), # categorical predictors
              one_hot = TRUE) %>% 
-  step_normalize(all_numeric_predictors()) # all the numeric variables
+  step_normalize(all_numeric_predictors()) %>% 
+  step_center(all_numeric_predictors()) %>% 
+  step_scale(all_numeric_predictors()) # all the numeric variables
 
+#centering and scale
+#scale that up (look at the best parameters for that so that tuning isnt trying too much - use small data set)
+
+cov_recipe_svm <- recipe(cover_type ~ ., data = cov_train_svm) %>% 
+  step_dummy(all_nominal_predictors(), # categorical predictors
+             one_hot = TRUE) %>% 
+  step_normalize(all_numeric_predictors())
 ```
 
 
@@ -90,11 +102,34 @@ vfolds <- vfold_cv(cov_train, strata = cover_type)
 4.  Tune the models. Choose appropriate parameters and grids. If the computational costs of tuning given your strategy are prohibitive, how might you work around this?
 
 # SVM
+```{r}
+# create clustering 
+svm_rbf_spec <- svm_rbf() %>% 
+  set_mode("classification") %>% 
+  set_engine("kernlab")
+
+svm_rbf_fit <- svm_rbf_spec %>% 
+  fit(cover_type ~ ., data = cov_train_svm)
+
+svm_rbf_augment <- augment(svm_rbf_fit, new_data = cov_test_svm)
+
+# confusion matrix
+svm_rbf_augment %>% 
+  conf_mat(truth = cover_type, estimate = .pred_class)
+
+# roc curve
+svm_rbf_augment %>%
+  roc_curve(truth = cover_type, .pred_1, .pred_2, .pred_3, .pred_4, .pred_5, .pred_6, .pred_7) %>% 
+  autoplot()
+
+# roc curve
+svm_rbf_augment %>%
+  roc_auc(truth = cover_type, .pred_1, .pred_2, .pred_3, .pred_4, .pred_5, .pred_6, .pred_7)
+
+```
+
+
 ```{r eval = FALSE}
-cov_recipe_svm <- recipe(cover_type ~ ., data = cov_train_svm) %>% 
-  step_dummy(all_nominal_predictors(), # categorical predictors
-             one_hot = TRUE) %>% 
-  step_normalize(all_numeric_predictors())  
 
 # create clustering 
 svm_spec <- svm_poly(degree = 1, cost = tune()) %>% 
@@ -134,13 +169,13 @@ rf_spec <- rand_forest(mtry = tune(),
 # create workflow with feature recipe
 rf_workflow <- workflow() %>% 
   add_model(rf_spec) %>% 
-  add_recipe(cov_recipe)
+  add_recipe(cov_recipe_svm)
 
 # this is taking a r
 rf_tune <- rf_workflow %>% 
   tune_grid(
     resamples = vfolds, # add folds
-    grid = 10 # number of combos of mtry and trees
+    grid = 2 # number of combos of mtry and trees
   )
 
 ```
