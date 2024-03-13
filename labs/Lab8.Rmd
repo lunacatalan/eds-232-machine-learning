@@ -32,8 +32,7 @@ Explore the data.
 covtype <- read_csv(here::here("labs", "data", "covtype_sample.csv")) %>% 
   janitor::clean_names() %>% 
   mutate(cover_type = as.factor(cover_type)) %>% 
-  mutate(cover_type = as.factor(cover_type)) %>%  
-  mutate(across(6:54, as.factor)) %>%   # convert binary to initial
+  mutate(across(11:54, as.factor)) %>%   # convert binary to initial
   select(-soil_type_15, -soil_type_37, -soil_type_38, -soil_type_39, -soil_type_40)
   #select_if(function(col) length(unique(col))>1) %>%  # remove columns with only 0 in them
 
@@ -67,35 +66,22 @@ cov_split <- initial_split(covtype)
 cov_train <- training(cov_split)
 cov_test <- testing(cov_split)
 
-# split the data to only keep 10% because svm thinks its redundant
-cov_split_svm <- initial_split(cov_train, 
-                               strata = cover_type,
-                               prop = 0.1)
-cov_train_svm <- training(cov_split_svm)
-cov_test_svm <- testing(cov_split_svm)
-
 # create recipe with training data 
 cov_recipe <- recipe(cover_type ~ ., data = cov_train) %>% 
-  step_dummy(all_nominal_predictors(), # categorical predictors
-             one_hot = TRUE) %>% 
-  step_normalize(all_numeric_predictors()) %>% 
+  step_zv(all_predictors()) %>% 
   step_center(all_numeric_predictors()) %>% 
   step_scale(all_numeric_predictors()) # all the numeric variables
 
 #centering and scale
 #scale that up (look at the best parameters for that so that tuning isnt trying too much - use small data set)
 
-cov_recipe_svm <- recipe(cover_type ~ ., data = cov_train_svm) %>% 
-  step_dummy(all_nominal_predictors(), # categorical predictors
-             one_hot = TRUE) %>% 
-  step_normalize(all_numeric_predictors())
 ```
 
 
 3.  Create the folds for cross-validation.
 ```{r}
 # create the folds 
-vfolds <- vfold_cv(cov_train, strata = cover_type)
+vfolds <- vfold_cv(cov_train, strata = cover_type, v = 5)
 ```
 
 
@@ -104,14 +90,67 @@ vfolds <- vfold_cv(cov_train, strata = cover_type)
 # SVM
 ```{r}
 # create clustering 
+svm_rbf_spec <- svm_rbf(cost = tune()) %>% 
+  set_mode("classification") %>% 
+  set_engine("kernlab")
+
+# create workflow with feature recipe
+svm_workflow <- workflow() %>% 
+  add_model(svm_rbf_spec) %>% 
+  add_recipe(cov_recipe)
+
+svm_grid <- grid_regular(cost(), 
+                         levels = 5)
+
+doParallel::registerDoParallel(cores = 4)
+
+system.time(
+  svm_tune <- tune_grid(
+    svm_workflow,
+    resamples = vfolds,
+    grid = svm_grid
+  )
+)
+
+autoplot(svm_tune)
+
+best_cost <- select_best(svm_tune, 
+                         metric = "accuracy")
+
+svm_final <- finalize_workflow(svm_workflow, 
+                                      best_cost)
+
+svm_fit <- svm_final %>% 
+  fit(cov_train)
+
+svm_rbf_augment1 <- augment(svm_fit, new_data = cov_test)
+
+# confusion matrix
+svm_rbf_augment1 %>% 
+  conf_mat(truth = cover_type, estimate = .pred_class)
+
+# roc curve
+svm_rbf_augment1 %>%
+  roc_curve(truth = cover_type, .pred_1, .pred_2, .pred_3, .pred_4, .pred_5, .pred_6, .pred_7) %>% 
+  autoplot()
+
+# roc curve
+svm_rbf_augment1 %>%
+  roc_auc(truth = cover_type, .pred_1, .pred_2, .pred_3, .pred_4, .pred_5, .pred_6, .pred_7)
+```
+
+## Second way 
+```{r eval = FALSE}
+
+# create clustering 
 svm_rbf_spec <- svm_rbf() %>% 
   set_mode("classification") %>% 
   set_engine("kernlab")
 
 svm_rbf_fit <- svm_rbf_spec %>% 
-  fit(cover_type ~ ., data = cov_train_svm)
+  fit(cover_type ~ ., data = cov_train)
 
-svm_rbf_augment <- augment(svm_rbf_fit, new_data = cov_test_svm)
+svm_rbf_augment <- augment(svm_rbf_fit, new_data = cov_train)
 
 # confusion matrix
 svm_rbf_augment %>% 
@@ -126,37 +165,12 @@ svm_rbf_augment %>%
 svm_rbf_augment %>%
   roc_auc(truth = cover_type, .pred_1, .pred_2, .pred_3, .pred_4, .pred_5, .pred_6, .pred_7)
 
+# accuracy curve
+svm_rbf_augment %>%
+  accuracy(truth = cover_type, estimate = .pred_class)
+
 ```
 
-
-```{r eval = FALSE}
-
-# create clustering 
-svm_spec <- svm_poly(degree = 1, cost = tune()) %>% 
-  set_mode("classification") %>% 
-  set_engine("kernlab")
-
-# create workflow
-svm_wf <- workflow() %>% 
-  add_model(svm_spec %>% 
-              set_args(cost = tune())) %>% 
-  add_recipe(cov_recipe_svm)
-  
-
-# create grid
-param_grid <- grid_regular(cost(), 
-                           levels = 10) # number of different values for cost() that we want to try
-
-# tune the cluster
-# recipe with the step_normalize() did not work so I removed it
-tune_res <- tune_grid(
-  svm_wf, # add workflow
-  resamples = vfolds, # add folds
-  grid = param_grid # add grid
-)
-
-autoplot(tune_res)
-```
 
 
 # Random Forest
@@ -169,13 +183,13 @@ rf_spec <- rand_forest(mtry = tune(),
 # create workflow with feature recipe
 rf_workflow <- workflow() %>% 
   add_model(rf_spec) %>% 
-  add_recipe(cov_recipe_svm)
+  add_recipe(cov_recipe)
 
 # this is taking a r
 rf_tune <- rf_workflow %>% 
   tune_grid(
     resamples = vfolds, # add folds
-    grid = 2 # number of combos of mtry and trees
+    grid = 5 # number of combos of mtry and trees
   )
 
 ```
@@ -183,5 +197,33 @@ rf_tune <- rf_workflow %>%
 
 5.  Conduct final predictions for both models and compare their prediction performances and computation costs from part 4.
 
+```{r}
+rf_final = finalize_workflow(rf_workflow, 
+                             select_best(rf_tune, metric = "roc_auc"))
+
+rf_fit <- fit(rf_final, cov_train) # fit the data to the training data
+
+train_predict <- predict(object = rf_fit, new_data = cov_train) %>% # predict the training set
+  bind_cols(cov_train) # bind training set column to prediction
+
+test_predict <- predict(object = rf_fit, new_data = cov_test) %>% # predict the training set
+  bind_cols(cov_test) # bind prediction to testing data column
+
+train_metrics <- train_predict %>%
+  metrics(cover_type, .pred_class) # get testing data metrics
+
+test_metrics <- test_predict %>%
+  metrics(cover_type, .pred_class) # get testing data metrics
+
+train_metrics
+test_metrics
+```
+
+
 -   Which type of model do you think is better for this task?
+
+Both models performed with similar accuracy, but the random forest performs with about 5% more accuracy than the svm model. Also, computationally the random forest was a bit faster, so I would select that one to do this task. 
+
 -   Why do you speculate this is the case?
+
+This is probably the case because there is a class imablance and the random forest is better at handling that. The random forest is built to handle class differences, and the svm is built for binary (two-class). Since we have an imbalance in the distribution of each characteristic, the random forest is better for handing this.
