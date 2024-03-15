@@ -1,0 +1,122 @@
+---
+title: "Lab 9"
+author: "Luna Herschenfeld-Catalán"
+date: "2024-03-15"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+
+library(tidyverse)
+library(tidymodels)
+library(tensorflow)
+library(keras)
+library(rsample)
+library(glmnet)
+library(corrplot)
+
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+set.seed(5)
+```
+
+# Read in Data
+```{r}
+set.seed(5)
+sample_sub <- read_csv(here::here('labs', "data", "sample_submission.csv"))
+
+# outcome variable is DIC
+dic_data <- read_csv(here::here('labs', "data", "train.csv")) %>% 
+  janitor::clean_names() %>% 
+  #mutate(id = as.character(id)) %>% 
+  select(-c(x13, ta1_x))
+
+dic_split <- initial_split(dic_data)
+dic_train <- training(dic_split)
+dic_test <- testing(dic_split)
+
+# fir predictions onto this
+test <- read_csv(here::here('labs', "data", "test.csv")) %>% 
+  janitor::clean_names()
+  #mutate(id = as.character(id))
+                       
+```
+
+# Explore the data
+```{r}
+dic_train %>% 
+  ggplot() +
+  geom_histogram(aes(x = dic))
+
+# Look at multicollinearity 
+cor(dic_train) %>% corrplot()
+```
+
+# feature selection because things are highly correlated 
+# random forest (VIP)
+
+```{r}
+set.seed(5)
+
+# create recipe with training data 
+dic_recipe <- recipe(dic ~ ., data = dic_train) %>% 
+  step_zv(all_predictors()) %>% 
+  step_center(all_numeric_predictors()) %>% 
+  step_scale(all_numeric_predictors()) # all the numeric variables
+
+
+vfolds <- vfold_cv(dic_train, v = 5)
+
+rf_spec <- rand_forest(mtry = tune(), 
+                        trees = tune()) %>%
+  set_engine("ranger") %>% 
+  set_mode("regression") # the output is cover type
+
+# create workflow with feature recipe
+rf_workflow <- workflow() %>% 
+  add_model(rf_spec) %>% 
+  add_recipe(dic_recipe)
+
+doParallel::registerDoParallel(cores = 4)
+
+# this is taking a r
+system.time(
+  rf_tune <- rf_workflow %>% 
+    tune_grid(
+      resamples = vfolds, # add folds
+      grid = 5 # number of combos of mtry and trees
+    )
+)
+
+rf_final = finalize_workflow(rf_workflow, 
+                             select_best(rf_tune, metric = "rmse"))
+
+rf_fit <- fit(rf_final, dic_train) # fit the data to the training data
+
+train_predict <- predict(object = rf_fit, new_data = dic_train) %>% # predict the training set
+  bind_cols(dic_train) # bind training set column to prediction
+
+test_predict <- predict(object = rf_fit, new_data = dic_test) %>% # predict the training set
+  bind_cols(dic_test) # bind prediction to testing data column
+
+train_metrics <- train_predict %>%
+  metrics(dic, .pred) # get testing data metrics
+
+test_metrics <- test_predict %>%
+  metrics(dic, .pred) # get testing data metrics
+
+train_metrics
+test_metrics
+
+new_predict <- predict(object = rf_fit, new_data = test) %>% 
+  bind_cols(test) %>% 
+  select(id, DIC = .pred)
+
+write.csv(new_predict, "data_outputs_calcofi/new_predict.csv", row.names=FALSE)
+```
+
+
+Submit just ID and predicitons
+
+
+
+

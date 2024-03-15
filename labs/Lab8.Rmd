@@ -14,13 +14,14 @@ Natural resource managers responsible for developing ecosystem management strate
 You task is build both an SVM and a random forest model and compare their performance on accuracy and computation time.
 
 1.  The data is available here: <https://ucsb.box.com/s/ai5ost029enlguqyyn04bnlfaqmp8kn4>
-```{r setup}
-knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```{r setup, message = FALSE}
 library(tidymodels)
 library(tidyverse)
 library(dplyr)
 library(kernlab)
 library(tidyclust)
+
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
 
 set.seed(47)
 ```
@@ -127,7 +128,8 @@ svm_rbf_augment1 <- augment(svm_fit, new_data = cov_test)
 
 # confusion matrix
 svm_rbf_augment1 %>% 
-  conf_mat(truth = cover_type, estimate = .pred_class)
+  conf_mat(truth = cover_type, estimate = .pred_class) %>% 
+  autoplot(type = "heatmap")
 
 # roc curve
 svm_rbf_augment1 %>%
@@ -154,7 +156,8 @@ svm_rbf_augment <- augment(svm_rbf_fit, new_data = cov_train)
 
 # confusion matrix
 svm_rbf_augment %>% 
-  conf_mat(truth = cover_type, estimate = .pred_class)
+  conf_mat(truth = cover_type, estimate = .pred_class) %>% 
+  autoplot(type = "heatmap")
 
 # roc curve
 svm_rbf_augment %>%
@@ -174,7 +177,7 @@ svm_rbf_augment %>%
 
 
 # Random Forest
-```{r eval = FALSE}
+```{r}
 rf_spec <- rand_forest(mtry = tune(), 
                         trees = tune()) %>%
   set_engine("ranger") %>% 
